@@ -199,7 +199,7 @@ export class GfAnalysisPageComponent implements OnDestroy, OnInit {
 
         const snackBarRef = this.snackBar.open(
           '✅ ' + $localize`AI prompt has been copied to the clipboard`,
-          $localize`Open Duck.ai` + ' →',
+          $localize`Open Gemini portfolio manager` + ' →',
           {
             duration: ms('7 seconds')
           }
@@ -209,7 +209,7 @@ export class GfAnalysisPageComponent implements OnDestroy, OnInit {
           .onAction()
           .pipe(takeUntil(this.unsubscribeSubject))
           .subscribe(() => {
-            window.open('https://duck.ai', '_blank');
+            window.open('https://gemini.google.com/gem/e3daf8a59d98', '_blank');
           });
 
         this.actionsMenuButton.closeMenu();
