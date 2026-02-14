@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-import numpy as np
+import quantstats as qs
 from dotenv import load_dotenv
 import requests
 
@@ -36,71 +36,69 @@ def get_ghostfolio_activities_raw_data(url, security_token):
 
     return activities
 
-def calculate_twr_daily_returns(performance_data, activities_data):
-    # 1. Prepare Performance Data
-    df_perf = pd.DataFrame(performance_data)
-    df_perf['date'] = pd.to_datetime(df_perf['date']).dt.date
-    # Keep only necessary columns and sort by date
-    df_perf = df_perf[['date', 'netWorth']].sort_values('date')
+def calculate_twr_daily_returns(performance_data):
+    """
+    Transforms Ghostfolio performance data into a daily return series 
+    optimized for QuantStats by aligning to a Business Day calendar.
+    """
+    if not performance_data:
+        return pd.Series(dtype=float)
 
-    # 2. Prepare Activities Data (Inflows)
-    df_act = pd.DataFrame(activities_data)
-    df_act['date'] = pd.to_datetime(df_act['date']).dt.date
+    # 1. Load data into DataFrame
+    df = pd.DataFrame(performance_data)
     
-    # Calculate net cash flow: BUYs are positive, SELLs are negative
-    df_act['net_inflow'] = df_act.apply(
-        lambda x: x['valueInBaseCurrency'] if x['type'] == 'BUY' else 
-                 (-x['valueInBaseCurrency'] if x['type'] == 'SELL' else 0), axis=1
-    )
+    # 2. Convert date column and set as index (required for resampling)
+    df['date'] = pd.to_datetime(df['date'])
+    df = df.sort_values('date').set_index('date')
     
-    # Group by date to handle multiple trades in a single day
-    df_daily_inflow = df_act.groupby('date')['net_inflow'].sum().reset_index()
+    # 3. Calculate Daily Returns from Cumulative Performance
+    # Formula: r(t) = (1 + Cumulative_Ret_Today) / (1 + Cumulative_Ret_Yesterday) - 1
+    # We use 'netPerformanceInPercentageWithCurrencyEffect' as it accounts for TWR.
+    cum_ret = df['netPerformanceInPercentageWithCurrencyEffect']
+    daily_returns = (1 + cum_ret) / (1 + cum_ret.shift(1)) - 1
+    
+    # 4. Handle the initial data point
+    # The first row will be NaN after shift; we set it to 0 to establish a starting point.
+    daily_returns.iloc[0] = 0
+    
+    # 5. Resample to Business Days ('B')
+    # This automatically removes Saturdays and Sundays. 
+    # .asfreq() ensures that if a weekday is missing in the data, it is created as NaN.
+    daily_series = daily_returns.resample('B').asfreq()
+    
+    # 6. Fill missing values
+    # We fill NaNs with 0.0 (meaning 0% return) to handle market holidays 
+    # and ensure the timeline is continuous for Volatility calculations.
+    daily_series = daily_series.fillna(0.0)
+    
+    # 7. Clean up the start of the series
+    # Optional: Remove the leading zeros before your first actual investment 
+    # to avoid skewing "Time Under Water" or "Max Drawdown" duration metrics.
+    first_valid_date = daily_series[daily_series != 0].index.min()
+    if pd.notna(first_valid_date):
+        daily_series = daily_series[first_valid_date:]
 
-    # 3. Merge Datasets
-    # Join activity data onto the daily performance timeline
-    df = pd.merge(df_perf, df_daily_inflow, on='date', how='left').fillna(0)
+    return daily_series.astype(float)
 
-    # 4. Calculate Daily Return (Time-Weighted)
-    # Formula: (Today's Value - Today's Inflow) / Yesterday's Value - 1
-    df['prev_worth'] = df['netWorth'].shift(1)
-    df['daily_return'] = (df['netWorth'] - df['net_inflow']) / df['prev_worth'] - 1
-
-    # 5. Clean Data
-    # Fill the first day or any invalid calculation with 0
-    df['daily_return'] = df['daily_return'].replace([np.inf, -np.inf], np.nan).fillna(0)
-
-    # Return as a simple list of dictionaries
-    return df[['date', 'daily_return']].to_dict('records')
+def analyze_with_quantstats(daily_returns_series):
+    # Generate a comprehensive HTML report using QuantStats
+    qs.reports.html(daily_returns_series, output='portfolio_report.html', title='My Portfolio', benchmark="VT", rf=0.04)
 
 # Example usage
 if __name__ == "__main__":
     api_host = os.getenv("GHOSTFOLIO_API_HOST")
     api_key = os.getenv("GHOSTFOLIO_API_KEY")
     performance_data = get_ghostfolio_performance_raw_data(api_host, api_key)
-    activity_data = get_ghostfolio_activities_raw_data(api_host, api_key)
-    
-    daily_returns_list = calculate_twr_daily_returns(performance_data, activity_data)
-    returns = [x['daily_return'] for x in daily_returns_list]
-    # 1. Clean the data (already did returns[3:])
-    returns = np.array(returns[3:])
+    # If you want to analyze activities, uncomment the following line and ensure you have the correct permissions and data structure
+    # activity_data = get_ghostfolio_activities_raw_data(api_host, api_key)
 
-    # 2. Calculate Daily Metrics
-    avg_daily_return = np.mean(returns)
-    std_daily_return = np.std(returns)
+    daily_returns_series = calculate_twr_daily_returns(performance_data)
+    # Remove the first few entries to mitigate the impact of the initial value and any potential outliers at the start of the series
+    clean_daily_returns = daily_returns_series.iloc[2:]
 
-    # 3. Annualize the Metrics (using 365 days)
-    # Annual Return = Mean Daily Return * 365
-    avg_return_annualized = avg_daily_return * 365
-    
-    # Annual Volatility = Daily Std Dev * Square Root of 365
-    std_dev_annualized = std_daily_return * np.sqrt(365)
-
-    # 4. Calculate Sharpe Ratio (Risk-free rate = 4%)
-    rf_rate = 0.04
-    sharpe = (avg_return_annualized - rf_rate) / std_dev_annualized
-
-    # 5. Display Results
-    print(f"--- Portfolio Performance Metrics ---")
-    print(f"Average Annual Return: {avg_return_annualized:.2%}")
-    print(f"Annual Volatility:     {std_dev_annualized:.2%}")
-    print(f"Sharpe Ratio:          {sharpe:.2f}")
+    # Start to analyze the cleaned daily returns with QuantStats
+    # My work start from June 2025, so I want to focus on the performance from that point onward 
+    # to get a more accurate picture of the portfolio's behavior during my active management period.
+    start_date = '2025-06-01'
+    real_daily_returns = clean_daily_returns[clean_daily_returns.index >= start_date]
+    analyze_with_quantstats(real_daily_returns)
