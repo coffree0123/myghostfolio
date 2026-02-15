@@ -109,6 +109,7 @@ if __name__ == "__main__":
         qs.reports.html(
             filtered_returns,
             benchmark="VT",
+            rf=0.04,
             output="portfolio_report.html",
             title="Portfolio Performance",
         )
