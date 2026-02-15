@@ -111,7 +111,7 @@ def parse_args():
     )
     parser.add_argument(
         "--start-date",
-        default="2025-06-01",
+        default="2015-01-01",
         help="Start date for return analysis (YYYY-MM-DD)",
     )
     parser.add_argument(
