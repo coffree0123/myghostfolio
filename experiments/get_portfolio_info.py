@@ -1,123 +1,117 @@
 import os
 import pandas as pd
 import quantstats as qs
-from dotenv import load_dotenv
 import requests
+from dotenv import load_dotenv
 
 load_dotenv()
 
 
-def get_ghostfolio_performance_raw_data(url, security_token):
-    # 1. Get JWT token
+def fetch_ghostfolio_data():
+    api_url = os.getenv("GHOSTFOLIO_API_HOST")
+    api_token = os.getenv("GHOSTFOLIO_API_KEY")
+
+    # Authenticate and get headers
     auth_resp = requests.post(
-        f"{url}/api/v1/auth/anonymous", json={"accessToken": security_token}
+        f"{api_url}/api/v1/auth/anonymous", json={"accessToken": api_token}
+    ).json()
+    headers = {"Authorization": f"Bearer {auth_resp['authToken']}"}
+
+    # Fetch performance chart and activity history
+    performance = (
+        requests.get(
+            f"{api_url}/api/v2/portfolio/performance?range=max", headers=headers
+        )
+        .json()
+        .get("chart", [])
     )
-    auth_resp.raise_for_status()
-    jwt_token = auth_resp.json()["authToken"]
-
-    # 2. Retrieve performance data
-    headers = {"Authorization": f"Bearer {jwt_token}"}
-    perf_resp = requests.get(
-        f"{url}/api/v2/portfolio/performance?range=max", headers=headers
+    activities = (
+        requests.get(f"{api_url}/api/v1/order", headers=headers)
+        .json()
+        .get("activities", [])
     )
-    perf_resp.raise_for_status()
-
-    return perf_resp.json().get("chart", [])
+    return performance, activities
 
 
-def calculate_daily_returns(
-    performance_data,
-    frequency="B",
-    value_column="netWorth",
-    investment_column="totalInvestmentValueWithCurrencyEffect",
-):
-    """
-    Build a cash-flow-adjusted daily return series from Ghostfolio chart data.
-
-    This is a daily Modified Dietz approximation that is much closer to a
-    true strategy-vs-benchmark comparison than deriving returns from ROAI.
-
-    Formula per day:
-        r_t = (V_t - V_(t-1) - CF_t) / (V_(t-1) + 0.5 * CF_t)
-
-    where:
-        - V_t  = end-of-day portfolio value
-        - CF_t = external net cash flow during day t, approximated as the
-                 day-over-day change of cumulative invested capital.
-    """
+def calculate_daily_returns(performance_data, activities, frequency="B"):
     if not performance_data:
         return pd.Series(dtype=float)
 
-    frequency = frequency.upper()
-    if frequency not in {"D", "B"}:
-        raise ValueError("frequency must be 'D' (calendar) or 'B' (business day)")
+    # 1. Process Daily Net Worth (V_t)
+    df_perf = pd.DataFrame(performance_data).assign(
+        date=lambda x: pd.to_datetime(x.date).dt.tz_localize(None)
+    )
+    daily_value = (
+        df_perf.set_index("date")["netWorth"].resample(frequency).last().ffill()
+    )
 
-    df = pd.DataFrame(performance_data)
-    required_columns = {"date", value_column, investment_column}
-    missing = required_columns.difference(df.columns)
-    if missing:
-        raise ValueError(
-            f"Missing required column(s) in performance data: {sorted(missing)}"
+    # 2. Process External Cash Flow (CF_t)
+    df_activities = pd.DataFrame(activities or [])
+    if not df_activities.empty:
+        df_activities["date"] = pd.to_datetime(df_activities["date"]).dt.tz_localize(
+            None
         )
 
-    df["date"] = pd.to_datetime(df["date"])
-    df = df.sort_values("date").set_index("date")
+        # Filter out activities from excluded accounts
+        is_active = df_activities["account"].apply(
+            lambda a: not a.get("isExcluded", False) if isinstance(a, dict) else True
+        )
+        df_activities = df_activities[is_active]
 
-    value = df[value_column].astype(float).resample(frequency).ffill()
-    cumulative_investment = (
-        df[investment_column].astype(float).resample(frequency).ffill().fillna(0.0)
-    )
+        def get_cash_flow(row):
+            # Calculate actual money in/out including fees
+            amount = float(
+                row.get("valueInBaseCurrency")
+                or (float(row["quantity"]) * float(row["unitPrice"]))
+            )
+            fee = float(row.get("feeInBaseCurrency", 0))
+            # BUY is positive inflow, SELL is negative outflow (consumption)
+            return (
+                (amount + fee)
+                if row["type"] == "BUY"
+                else -(amount - fee) if row["type"] == "SELL" else 0
+            )
 
-    cash_flow = cumulative_investment.diff().fillna(0.0)
+        cash_flows = df_activities.assign(
+            flow=df_activities.apply(get_cash_flow, axis=1)
+        )
+        daily_cash_flow = cash_flows.set_index("date")["flow"].resample(frequency).sum()
+    else:
+        daily_cash_flow = pd.Series(0.0, index=daily_value.index)
 
-    previous_value = value.shift(1)
-    denominator = previous_value + 0.5 * cash_flow
-    numerator = value - previous_value - cash_flow
+    # 3. Modified Dietz Formula: (V_t - V_(t-1) - CF_t) / (V_(t-1) + 0.5 * CF_t)
+    df_combined = pd.DataFrame(
+        {"value": daily_value, "cash_flow": daily_cash_flow}
+    ).fillna(0)
+    prev_value = df_combined["value"].shift(1)
+    denominator = prev_value + 0.5 * df_combined["cash_flow"]
 
-    returns = numerator / denominator
+    returns = (
+        df_combined["value"] - prev_value - df_combined["cash_flow"]
+    ) / denominator
+    returns = returns.replace([float("inf"), -float("inf")], 0).fillna(0)
+    returns[denominator <= 0] = 0
 
-    invalid_denominator = denominator <= 0
-    returns[invalid_denominator] = 0.0
-
-    returns = returns.replace([float("inf"), float("-inf")], 0.0).fillna(0.0)
-
-    # Start analysis when invested capital is positive.
-    first_invested_date = cumulative_investment[cumulative_investment > 0].index.min()
-    if pd.notna(first_invested_date):
-        returns = returns[returns.index >= first_invested_date]
-
-    return returns.astype(float)
-
-
-def analyze_with_quantstats(daily_returns_series, benchmark="VT"):
-    # Generate a comprehensive HTML report using QuantStats
-    qs.reports.html(
-        daily_returns_series,
-        output="portfolio_report.html",
-        title="My Portfolio",
-        benchmark=benchmark,
-        rf=0.04,
-    )
+    # Start analysis from the first investment date
+    first_date = daily_cash_flow[daily_cash_flow != 0].index.min()
+    start_point = first_date if pd.notna(first_date) else returns.index[0]
+    return returns[returns.index >= start_point]
 
 
-# Example usage
 if __name__ == "__main__":
-    api_host = os.getenv("GHOSTFOLIO_API_HOST")
-    api_key = os.getenv("GHOSTFOLIO_API_KEY")
+    perf_data, activity_data = fetch_ghostfolio_data()
+    daily_returns = calculate_daily_returns(perf_data, activity_data)
 
-    if not api_host or not api_key:
-        raise ValueError("Please set GHOSTFOLIO_API_HOST and GHOSTFOLIO_API_KEY")
-
-    performance_data = get_ghostfolio_performance_raw_data(api_host, api_key)
-
-    # Daily returns for benchmark comparison (cash-flow-adjusted).
-    daily_returns_series = calculate_daily_returns(
-        performance_data,
-        frequency="B",
-    )
-
-    # Focus on your active management period.
-    start_date = "2025-06-01"
-    real_daily_returns = daily_returns_series[daily_returns_series.index >= start_date]
-
-    analyze_with_quantstats(real_daily_returns, benchmark="VT")
+    # Generate Performance Report
+    # Focus on active period starting from 2025-06-01
+    filtered_returns = daily_returns[daily_returns.index >= "2025-06-01"]
+    if not filtered_returns.empty:
+        qs.reports.html(
+            filtered_returns,
+            benchmark="VT",
+            output="portfolio_report.html",
+            title="Portfolio Performance",
+        )
+        print("Success: portfolio_report.html generated.")
+    else:
+        print("No data available for the selected period.")
