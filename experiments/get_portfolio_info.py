@@ -60,10 +60,7 @@ def calculate_daily_returns(performance_data, activities, frequency="B"):
 
         def get_cash_flow(row):
             # Calculate actual money in/out including fees
-            amount = float(
-                row.get("valueInBaseCurrency")
-                or (float(row["quantity"]) * float(row["unitPrice"]))
-            )
+            amount = float(row.get("valueInBaseCurrency"))
             fee = float(row.get("feeInBaseCurrency", 0))
             # BUY is positive inflow, SELL is negative outflow (consumption)
             return (
