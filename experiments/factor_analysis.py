@@ -9,12 +9,10 @@ import statsmodels.api as sm
 
 
 PORTFOLIO_WEIGHTS: dict[str, float] = {
-    "UPRO": 0.05,
-    "MIDU": 0.025,
-    "SAA": 0.025,
+    "RSSB": 0.10,
+    "RSST": 0.20,
     "00631L.TW": 0.05,
     "EFO": 0.05,
-    "RSST": 0.20,
     "AVUV": 0.075,
     "QVAL": 0.075,
     "QMOM": 0.15,
