@@ -1,4 +1,5 @@
 import os
+from urllib.parse import quote
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -22,7 +23,8 @@ def fetch_ghostfolio_data() -> (
         tuple[list, list, pd.DataFrame]:
             - performance chart data entries
             - order activity entries
-            - holdings table as a pandas DataFrame
+            - holdings table as a pandas DataFrame (enriched with
+              investmentInBaseCurrencyWithCurrencyEffect when available)
     """
     api_url = os.getenv("GHOSTFOLIO_API_HOST")
     api_token = os.getenv("GHOSTFOLIO_API_KEY")
@@ -51,6 +53,30 @@ def fetch_ghostfolio_data() -> (
         .json()
         .get("holdings", [])
     )
+
+    if not holdings.empty and {"dataSource", "symbol"}.issubset(holdings.columns):
+        investment_with_currency_effect: list[float | None] = []
+
+        for _, row in holdings.iterrows():
+            data_source = row.get("dataSource")
+            symbol = row.get("symbol")
+
+            if pd.isna(data_source) or pd.isna(symbol):
+                investment_with_currency_effect.append(None)
+                continue
+
+            detail = requests.get(
+                f"{api_url}/api/v1/portfolio/holding/{quote(str(data_source), safe='')}/{quote(str(symbol), safe='')}",
+                headers=headers,
+            ).json()
+            investment_with_currency_effect.append(
+                detail.get("investmentInBaseCurrencyWithCurrencyEffect")
+            )
+
+        holdings["investmentInBaseCurrencyWithCurrencyEffect"] = (
+            investment_with_currency_effect
+        )
+
     return performance, activities, holdings
 
 
@@ -190,12 +216,11 @@ def print_holdings_info(holdings: pd.DataFrame) -> None:
     )
 
     total_value = df["valueInBaseCurrency"].sum()
-    total_invested = df["investment"].sum()
+    total_invested = df.get("investmentInBaseCurrencyWithCurrencyEffect").sum()
     total_pnl_with_fx = net_performance_with_fx.sum()
     total_pnl_pct_with_fx = (
         (total_pnl_with_fx / total_invested * 100) if total_invested else 0
     )
-    total_currency_change = total_pnl_with_fx - net_performance.sum()
 
     pd.set_option("display.width", 120)
     print("\nHOLDINGS")
@@ -208,7 +233,6 @@ def print_holdings_info(holdings: pd.DataFrame) -> None:
         f"Total P&L     : {total_pnl_with_fx:,.0f} TWD "
         f"({total_pnl_pct_with_fx:.1f}%)"
     )
-    print(f"Currency Change: {total_currency_change:,.0f} TWD")
 
 
 if __name__ == "__main__":
