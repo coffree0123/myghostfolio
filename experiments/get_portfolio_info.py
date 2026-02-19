@@ -1,4 +1,7 @@
 import os
+from collections.abc import Mapping, Sequence
+from typing import Any
+
 import pandas as pd
 import quantstats as qs
 import requests
@@ -7,7 +10,20 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def fetch_ghostfolio_data():
+def fetch_ghostfolio_data() -> (
+    tuple[list[dict[str, Any]], list[dict[str, Any]], pd.DataFrame]
+):
+    """Fetch portfolio performance, activities, and holdings from Ghostfolio.
+
+    Reads API host and API key from environment variables, authenticates
+    anonymously, and queries the relevant Ghostfolio endpoints.
+
+    Returns:
+        tuple[list, list, pd.DataFrame]:
+            - performance chart data entries
+            - order activity entries
+            - holdings table as a pandas DataFrame
+    """
     api_url = os.getenv("GHOSTFOLIO_API_HOST")
     api_token = os.getenv("GHOSTFOLIO_API_KEY")
 
@@ -38,7 +54,26 @@ def fetch_ghostfolio_data():
     return performance, activities, holdings
 
 
-def calculate_daily_returns(performance_data, activities, frequency="B"):
+def calculate_daily_returns(
+    performance_data: Sequence[Mapping[str, Any]] | None,
+    activities: Sequence[Mapping[str, Any]] | None,
+    frequency: str = "B",
+) -> pd.Series:
+    """Calculate time-series returns with external cash-flow adjustments.
+
+    Uses a Modified Dietz-style formulation on resampled portfolio values and
+    aggregated BUY/SELL cash flows to estimate periodic returns.
+
+    Args:
+        performance_data (list[dict]): Portfolio performance chart records.
+        activities (list[dict]): Transaction activities from Ghostfolio.
+        frequency (str, optional): Pandas resample frequency, defaults to
+            business day ("B").
+
+    Returns:
+        pd.Series: Periodic returns indexed by date, starting from first
+        non-zero cash-flow date when available.
+    """
     if not performance_data:
         return pd.Series(dtype=float)
 
@@ -63,7 +98,18 @@ def calculate_daily_returns(performance_data, activities, frequency="B"):
         )
         df_activities = df_activities[is_active]
 
-        def get_cash_flow(row):
+        def get_cash_flow(row: pd.Series) -> float:
+            """Convert one activity row into signed external cash flow.
+
+            BUY is treated as positive inflow and SELL as negative outflow,
+            with fees included in the signed amount.
+
+            Args:
+                row (pd.Series): A single activity row.
+
+            Returns:
+                float: Signed cash-flow amount in base currency.
+            """
             # Calculate actual money in/out including fees
             amount = float(row.get("valueInBaseCurrency"))
             fee = float(row.get("feeInBaseCurrency", 0))
@@ -100,12 +146,29 @@ def calculate_daily_returns(performance_data, activities, frequency="B"):
     return returns[returns.index >= start_point]
 
 
-def print_holdings_info(holdings: pd.DataFrame):
+def print_holdings_info(holdings: pd.DataFrame) -> None:
+    """Print a formatted holdings summary and portfolio totals.
+
+    Creates a symbol-level table with allocation, value, and performance,
+    sorted by holding value, then prints aggregate totals.
+
+    Args:
+        holdings (pd.DataFrame): Holdings payload from Ghostfolio API.
+    """
     if holdings.empty:
         print("No holdings data.")
         return
 
     df = holdings.copy()
+    net_performance = df["netPerformance"]
+    net_performance_pct = df["netPerformancePercent"]
+    net_performance_with_fx = df.get(
+        "netPerformanceWithCurrencyEffect", net_performance
+    )
+    net_performance_pct_with_fx = df.get(
+        "netPerformancePercentWithCurrencyEffect", net_performance_pct
+    )
+    currency_change = net_performance_with_fx - net_performance
 
     summary = (
         pd.DataFrame(
@@ -113,8 +176,9 @@ def print_holdings_info(holdings: pd.DataFrame):
                 "Symbol": df["symbol"],
                 "Alloc %": (df["allocationInPercentage"] * 100).map("{:.1f}%".format),
                 "Value (TWD)": df["valueInBaseCurrency"].map("{:,.0f}".format),
-                "P&L": df["netPerformance"].map("{:,.0f}".format),
-                "P&L %": (df["netPerformancePercent"] * 100).map("{:.1f}%".format),
+                "P&L": net_performance_with_fx.map("{:,.0f}".format),
+                "P&L %": (net_performance_pct_with_fx * 100).map("{:.1f}%".format),
+                "Currency Change": currency_change.map("{:,.0f}".format),
             }
         )
         .sort_values(
@@ -127,8 +191,11 @@ def print_holdings_info(holdings: pd.DataFrame):
 
     total_value = df["valueInBaseCurrency"].sum()
     total_invested = df["investment"].sum()
-    total_pnl = df["netPerformance"].sum()
-    total_pnl_pct = (total_pnl / total_invested * 100) if total_invested else 0
+    total_pnl_with_fx = net_performance_with_fx.sum()
+    total_pnl_pct_with_fx = (
+        (total_pnl_with_fx / total_invested * 100) if total_invested else 0
+    )
+    total_currency_change = total_pnl_with_fx - net_performance.sum()
 
     pd.set_option("display.width", 120)
     print("\nHOLDINGS")
@@ -137,7 +204,11 @@ def print_holdings_info(holdings: pd.DataFrame):
     print("-" * 60)
     print(f"Total Value   : {total_value:,.0f} TWD")
     print(f"Total Invested: {total_invested:,.0f} TWD")
-    print(f"Total P&L     : {total_pnl:,.0f} TWD ({total_pnl_pct:.1f}%)")
+    print(
+        f"Total P&L     : {total_pnl_with_fx:,.0f} TWD "
+        f"({total_pnl_pct_with_fx:.1f}%)"
+    )
+    print(f"Currency Change: {total_currency_change:,.0f} TWD")
 
 
 if __name__ == "__main__":
