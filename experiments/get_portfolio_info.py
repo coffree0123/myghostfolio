@@ -30,7 +30,12 @@ def fetch_ghostfolio_data():
         .json()
         .get("activities", [])
     )
-    return performance, activities
+    holdings = pd.DataFrame(
+        requests.get(f"{api_url}/api/v1/portfolio/holdings", headers=headers)
+        .json()
+        .get("holdings", [])
+    )
+    return performance, activities, holdings
 
 
 def calculate_daily_returns(performance_data, activities, frequency="B"):
@@ -95,12 +100,55 @@ def calculate_daily_returns(performance_data, activities, frequency="B"):
     return returns[returns.index >= start_point]
 
 
+def print_holdings_info(holdings: pd.DataFrame):
+    if holdings.empty:
+        print("No holdings data.")
+        return
+
+    df = holdings.copy()
+
+    summary = (
+        pd.DataFrame(
+            {
+                "Symbol": df["symbol"],
+                "Alloc %": (df["allocationInPercentage"] * 100).map("{:.1f}%".format),
+                "Value (TWD)": df["valueInBaseCurrency"].map("{:,.0f}".format),
+                "P&L": df["netPerformance"].map("{:,.0f}".format),
+                "P&L %": (df["netPerformancePercent"] * 100).map("{:.1f}%".format),
+            }
+        )
+        .sort_values(
+            by="Value (TWD)",
+            key=lambda x: x.str.replace(",", "").astype(float),
+            ascending=False,
+        )
+        .set_index("Symbol")
+    )
+
+    total_value = df["valueInBaseCurrency"].sum()
+    total_invested = df["investment"].sum()
+    total_pnl = df["netPerformance"].sum()
+    total_pnl_pct = (total_pnl / total_invested * 100) if total_invested else 0
+
+    pd.set_option("display.width", 120)
+    print("\nHOLDINGS")
+    print("-" * 60)
+    print(summary.to_string())
+    print("-" * 60)
+    print(f"Total Value   : {total_value:,.0f} TWD")
+    print(f"Total Invested: {total_invested:,.0f} TWD")
+    print(f"Total P&L     : {total_pnl:,.0f} TWD ({total_pnl_pct:.1f}%)")
+
+
 if __name__ == "__main__":
-    perf_data, activity_data = fetch_ghostfolio_data()
-    daily_returns = calculate_daily_returns(perf_data, activity_data)
+    # Fetch data from Ghostfolio API and print holdings info
+    perf_data, activity_data, holdings_data = fetch_ghostfolio_data()
+    print_holdings_info(holdings_data)
 
     # Generate Performance Report
     # Focus on active period starting from 2025-06-01
+    # Calculate daily returns using the modified Dietz method to account for cash flows
+    daily_returns = calculate_daily_returns(perf_data, activity_data)
     filtered_returns = daily_returns[daily_returns.index >= "2025-06-01"]
     if not filtered_returns.empty:
         qs.reports.html(
