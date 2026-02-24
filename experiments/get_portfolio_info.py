@@ -7,6 +7,9 @@ import pandas as pd
 import quantstats as qs
 import requests
 from dotenv import load_dotenv
+import logging
+
+logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
 
 load_dotenv()
 
