@@ -1,3 +1,15 @@
+"""
+Run this script to fetch portfolio performance, activities, and holdings from Ghostfolio, calculate returns with cash-flow adjustments, and generate a
+performance report.
+
+Run the following command in your terminal:
+```{python}
+python get_portfolio_info.py
+```
+
+The result will save a file named `portfolio_report.html` in the current directory, which you can open in a web browser to view the performance report. The script also prints a summary of current holdings and their performance to the console.
+"""
+
 import os
 from urllib.parse import quote
 from collections.abc import Mapping, Sequence
