@@ -192,7 +192,6 @@ describe('PortfolioCalculator', () => {
             timeWeightedInvestmentWithCurrencyEffect: new Big(
               '285.80000000000000396627'
             ),
-            transactionCount: 3,
             valueInBaseCurrency: new Big('0')
           }
         ],
@@ -209,6 +208,7 @@ describe('PortfolioCalculator', () => {
           netPerformanceInPercentage: -0.05528341497550734703,
           netPerformanceInPercentageWithCurrencyEffect: -0.05528341497550734703,
           netPerformanceWithCurrencyEffect: -15.8,
+          totalInvestment: 0,
           totalInvestmentValueWithCurrencyEffect: 0
         })
       );

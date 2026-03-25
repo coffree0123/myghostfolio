@@ -53,6 +53,7 @@ import {
   isBefore,
   isWithinInterval,
   min,
+  startOfDay,
   startOfYear,
   subDays
 } from 'date-fns';
@@ -157,13 +158,13 @@ export abstract class PortfolioCalculator {
     this.redisCacheService = redisCacheService;
     this.userId = userId;
 
-    const { endDate, startDate } = getIntervalFromDateRange(
-      'max',
-      subDays(dateOfFirstActivity, 1)
-    );
+    const { endDate, startDate } = getIntervalFromDateRange({
+      dateRange: 'max',
+      startDate: subDays(dateOfFirstActivity, 1)
+    });
 
-    this.endDate = endDate;
-    this.startDate = startDate;
+    this.endDate = endOfDay(endDate);
+    this.startDate = startOfDay(startDate);
 
     this.computeTransactionPoints();
 
@@ -236,7 +237,7 @@ export abstract class PortfolioCalculator {
     const exchangeRatesByCurrency =
       await this.exchangeRateDataService.getExchangeRatesByCurrency({
         currencies: Array.from(new Set(Object.values(currencies))),
-        endDate: endOfDay(this.endDate),
+        endDate: this.endDate,
         startDate: this.startDate,
         targetCurrency: this.currency
       });
@@ -445,7 +446,6 @@ export abstract class PortfolioCalculator {
         quantity: item.quantity,
         symbol: item.symbol,
         tags: item.tags,
-        transactionCount: item.transactionCount,
         valueInBaseCurrency: new Big(marketPriceInBaseCurrency).mul(
           item.quantity
         )
@@ -885,7 +885,7 @@ export abstract class PortfolioCalculator {
     // Make sure some key dates are present
     for (const dateRange of ['1d', '1y', '5y', 'max', 'mtd', 'wtd', 'ytd']) {
       const { endDate: dateRangeEnd, startDate: dateRangeStart } =
-        getIntervalFromDateRange(dateRange);
+        getIntervalFromDateRange({ dateRange });
 
       if (
         !isBefore(dateRangeStart, startDate) &&
@@ -1005,8 +1005,7 @@ export abstract class PortfolioCalculator {
             oldAccumulatedSymbol.feeInBaseCurrency.plus(feeInBaseCurrency),
           includeInHoldings: oldAccumulatedSymbol.includeInHoldings,
           quantity: newQuantity,
-          tags: oldAccumulatedSymbol.tags.concat(tags),
-          transactionCount: oldAccumulatedSymbol.transactionCount + 1
+          tags: oldAccumulatedSymbol.tags.concat(tags)
         };
       } else {
         currentTransactionPointItem = {
@@ -1024,8 +1023,7 @@ export abstract class PortfolioCalculator {
           dividend: new Big(0),
           includeInHoldings: INVESTMENT_ACTIVITY_TYPES.includes(type),
           investment: unitPrice.mul(quantity).mul(factor),
-          quantity: quantity.mul(factor),
-          transactionCount: 1
+          quantity: quantity.mul(factor)
         };
       }
 

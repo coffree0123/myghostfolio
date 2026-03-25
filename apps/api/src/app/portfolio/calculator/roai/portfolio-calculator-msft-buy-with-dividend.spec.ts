@@ -162,8 +162,7 @@ describe('PortfolioCalculator', () => {
             },
             quantity: new Big('1'),
             symbol: 'MSFT',
-            tags: [],
-            transactionCount: 2
+            tags: []
           }
         ],
         totalFeesWithCurrencyEffect: new Big('19'),
@@ -175,6 +174,7 @@ describe('PortfolioCalculator', () => {
 
       expect(portfolioSnapshot.historicalData.at(-1)).toMatchObject(
         expect.objectContaining({
+          totalInvestment: 298.58,
           totalInvestmentValueWithCurrencyEffect: 298.58
         })
       );
