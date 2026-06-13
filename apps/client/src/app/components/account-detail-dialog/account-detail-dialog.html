@@ -24,9 +24,7 @@
         class="h-100"
         [currency]="user?.settings?.baseCurrency"
         [historicalDataItems]="historicalDataItems"
-        [isInPercent]="
-          data.hasImpersonationId || user.settings.isRestrictedView
-        "
+        [isInPercentage]="showValuesInPercentage()"
         [isLoading]="isLoadingChart"
         [locale]="user?.settings?.locale"
       />
@@ -93,8 +91,8 @@
 
     <mat-tab-group
       animationDuration="0ms"
+      [class.d-none]="isLoadingActivities"
       [mat-stretch-tabs]="false"
-      [ngClass]="{ 'd-none': isLoadingActivities }"
     >
       <mat-tab>
         <ng-template mat-tab-label>
@@ -118,12 +116,12 @@
           [deviceType]="data.deviceType"
           [hasPermissionToCreateActivity]="false"
           [hasPermissionToDeleteActivity]="false"
-          [hasPermissionToExportActivities]="
-            !data.hasImpersonationId && !user.settings.isRestrictedView
-          "
+          [hasPermissionToExportActivities]="!showValuesInPercentage()"
           [hasPermissionToFilter]="false"
           [hasPermissionToOpenDetails]="false"
           [locale]="user?.settings?.locale"
+          [pageIndex]="pageIndex"
+          [pageSize]="pageSize"
           [showAccountColumn]="false"
           [showActions]="
             !data.hasImpersonationId &&
@@ -137,6 +135,7 @@
           (activityToClone)="onCloneActivity($event)"
           (activityToUpdate)="onUpdateActivity($event)"
           (export)="onExport()"
+          (pageChanged)="onChangePage($event)"
           (sortChanged)="onSortChanged($event)"
         />
       </mat-tab>
@@ -149,6 +148,7 @@
           [accountBalances]="accountBalances"
           [accountCurrency]="currency"
           [accountId]="data.accountId"
+          [currentBalance]="balance"
           [locale]="user?.settings?.locale"
           [showActions]="
             !data.hasImpersonationId &&

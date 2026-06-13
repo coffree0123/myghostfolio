@@ -1,5 +1,5 @@
 import { UNKNOWN_KEY } from '@ghostfolio/common/config';
-import { prettifySymbol } from '@ghostfolio/common/helper';
+import { getCountryName, prettifySymbol } from '@ghostfolio/common/helper';
 import {
   InfoItem,
   PortfolioPosition,
@@ -9,17 +9,20 @@ import { hasPermission, permissions } from '@ghostfolio/common/permissions';
 import { Market } from '@ghostfolio/common/types';
 import { GfActivitiesTableComponent } from '@ghostfolio/ui/activities-table/activities-table.component';
 import { GfHoldingsTableComponent } from '@ghostfolio/ui/holdings-table/holdings-table.component';
+import { translate } from '@ghostfolio/ui/i18n';
 import { GfPortfolioProportionChartComponent } from '@ghostfolio/ui/portfolio-proportion-chart/portfolio-proportion-chart.component';
 import { DataService } from '@ghostfolio/ui/services';
 import { GfValueComponent } from '@ghostfolio/ui/value';
 import { GfWorldMapChartComponent } from '@ghostfolio/ui/world-map-chart';
 
-import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectorRef,
   Component,
+  computed,
   CUSTOM_ELEMENTS_SCHEMA,
   DestroyRef,
+  inject,
   OnInit
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -37,7 +40,6 @@ import { catchError } from 'rxjs/operators';
 @Component({
   host: { class: 'page' },
   imports: [
-    CommonModule,
     GfActivitiesTableComponent,
     GfHoldingsTableComponent,
     GfPortfolioProportionChartComponent,
@@ -52,48 +54,53 @@ import { catchError } from 'rxjs/operators';
   templateUrl: './public-page.html'
 })
 export class GfPublicPageComponent implements OnInit {
-  public continents: {
+  protected continents: {
     [code: string]: { name: string; value: number };
   };
-  public countries: {
+  protected countries: {
     [code: string]: { name: string; value: number };
   };
-  public defaultAlias = $localize`someone`;
-  public deviceType: string;
-  public hasPermissionForSubscription: boolean;
-  public holdings: PublicPortfolioResponse['holdings'][string][];
-  public info: InfoItem;
-  public latestActivitiesDataSource: MatTableDataSource<
+  protected readonly defaultAlias = $localize`someone`;
+  protected readonly deviceType = computed(
+    () => this.deviceDetectorService.deviceInfo().deviceType
+  );
+  protected hasPermissionForSubscription: boolean;
+  protected holdings: PublicPortfolioResponse['holdings'][string][];
+  protected info: InfoItem;
+  protected latestActivitiesDataSource: MatTableDataSource<
     PublicPortfolioResponse['latestActivities'][0]
   >;
-  public markets: {
+  protected markets: {
     [key in Market]: { id: Market; valueInPercentage: number };
   };
-  public pageSize = Number.MAX_SAFE_INTEGER;
-  public positions: {
-    [symbol: string]: Pick<PortfolioPosition, 'currency' | 'name'> & {
+  protected readonly pageSize = Number.MAX_SAFE_INTEGER;
+  protected positions: {
+    [symbol: string]: Pick<
+      PortfolioPosition['assetProfile'],
+      'currency' | 'name'
+    > & {
       value: number;
     };
   };
-  public publicPortfolioDetails: PublicPortfolioResponse;
-  public sectors: {
+  protected publicPortfolioDetails: PublicPortfolioResponse;
+  protected sectors: {
     [name: string]: { name: string; value: number };
   };
-  public symbols: {
+  protected symbols: {
     [name: string]: { name: string; symbol: string; value: number };
   };
-  public UNKNOWN_KEY = UNKNOWN_KEY;
+  protected readonly UNKNOWN_KEY = UNKNOWN_KEY;
+
+  private readonly activatedRoute = inject(ActivatedRoute);
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+  private readonly dataService = inject(DataService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly deviceDetectorService = inject(DeviceDetectorService);
+  private readonly router = inject(Router);
 
   private accessId: string;
 
-  public constructor(
-    private activatedRoute: ActivatedRoute,
-    private changeDetectorRef: ChangeDetectorRef,
-    private dataService: DataService,
-    private destroyRef: DestroyRef,
-    private deviceService: DeviceDetectorService,
-    private router: Router
-  ) {
+  public constructor() {
     this.activatedRoute.params.subscribe((params) => {
       this.accessId = params['id'];
     });
@@ -107,13 +114,11 @@ export class GfPublicPageComponent implements OnInit {
   }
 
   public ngOnInit() {
-    this.deviceType = this.deviceService.getDeviceInfo().deviceType;
-
     this.dataService
       .fetchPublicPortfolio(this.accessId)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        catchError((error) => {
+        catchError((error: HttpErrorResponse) => {
           if (error.status === StatusCodes.NOT_FOUND) {
             console.error(error);
             this.router.navigate(['/']);
@@ -135,7 +140,7 @@ export class GfPublicPageComponent implements OnInit {
       });
   }
 
-  public initializeAnalysisData() {
+  private initializeAnalysisData() {
     this.continents = {
       [UNKNOWN_KEY]: {
         name: UNKNOWN_KEY,
@@ -171,80 +176,84 @@ export class GfPublicPageComponent implements OnInit {
       this.holdings.push(position);
 
       this.positions[symbol] = {
-        currency: position.currency,
-        name: position.name,
+        currency: position.assetProfile.currency,
+        name: position.assetProfile.name,
         value: position.allocationInPercentage
       };
 
-      if (position.assetClass !== AssetClass.LIQUIDITY) {
+      if (position.assetProfile.assetClass !== AssetClass.LIQUIDITY) {
         // Prepare analysis data by continents, countries, holdings and sectors except for liquidity
 
-        if (position.countries.length > 0) {
-          for (const country of position.countries) {
-            const { code, continent, name, weight } = country;
+        if (position.assetProfile.countries.length > 0) {
+          for (const country of position.assetProfile.countries) {
+            const { code, continent, weight } = country;
 
             if (this.continents[continent]?.value) {
               this.continents[continent].value +=
-                weight * position.valueInBaseCurrency;
+                weight * (position.valueInBaseCurrency ?? 0);
             } else {
               this.continents[continent] = {
-                name: continent,
+                name: translate(continent),
                 value:
                   weight *
-                  this.publicPortfolioDetails.holdings[symbol]
-                    .valueInBaseCurrency
+                  (this.publicPortfolioDetails.holdings[symbol]
+                    .valueInBaseCurrency ?? 0)
               };
             }
 
             if (this.countries[code]?.value) {
               this.countries[code].value +=
-                weight * position.valueInBaseCurrency;
+                weight * (position.valueInBaseCurrency ?? 0);
             } else {
               this.countries[code] = {
-                name,
+                name: getCountryName({ code }),
                 value:
                   weight *
-                  this.publicPortfolioDetails.holdings[symbol]
-                    .valueInBaseCurrency
+                  (this.publicPortfolioDetails.holdings[symbol]
+                    .valueInBaseCurrency ?? 0)
               };
             }
           }
         } else {
           this.continents[UNKNOWN_KEY].value +=
-            this.publicPortfolioDetails.holdings[symbol].valueInBaseCurrency;
+            this.publicPortfolioDetails.holdings[symbol].valueInBaseCurrency ??
+            0;
 
           this.countries[UNKNOWN_KEY].value +=
-            this.publicPortfolioDetails.holdings[symbol].valueInBaseCurrency;
+            this.publicPortfolioDetails.holdings[symbol].valueInBaseCurrency ??
+            0;
         }
 
-        if (position.sectors.length > 0) {
-          for (const sector of position.sectors) {
+        if (position.assetProfile.sectors.length > 0) {
+          for (const sector of position.assetProfile.sectors) {
             const { name, weight } = sector;
 
             if (this.sectors[name]?.value) {
-              this.sectors[name].value += weight * position.valueInBaseCurrency;
+              this.sectors[name].value +=
+                weight * (position.valueInBaseCurrency ?? 0);
             } else {
               this.sectors[name] = {
-                name,
+                name: translate(name),
                 value:
                   weight *
-                  this.publicPortfolioDetails.holdings[symbol]
-                    .valueInBaseCurrency
+                  (this.publicPortfolioDetails.holdings[symbol]
+                    .valueInBaseCurrency ?? 0)
               };
             }
           }
         } else {
           this.sectors[UNKNOWN_KEY].value +=
-            this.publicPortfolioDetails.holdings[symbol].valueInBaseCurrency;
+            this.publicPortfolioDetails.holdings[symbol].valueInBaseCurrency ??
+            0;
         }
       }
 
       this.symbols[prettifySymbol(symbol)] = {
-        name: position.name,
+        name: position.assetProfile.name,
         symbol: prettifySymbol(symbol),
         value: isNumber(position.valueInBaseCurrency)
           ? position.valueInBaseCurrency
-          : position.valueInPercentage
+          : (position.valueInPercentage ?? 0)
       };
     }
   }

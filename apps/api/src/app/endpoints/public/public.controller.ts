@@ -7,6 +7,7 @@ import { TransformDataSourceInResponseInterceptor } from '@ghostfolio/api/interc
 import { ConfigurationService } from '@ghostfolio/api/services/configuration/configuration.service';
 import { ExchangeRateDataService } from '@ghostfolio/api/services/exchange-rate-data/exchange-rate-data.service';
 import { DEFAULT_CURRENCY } from '@ghostfolio/common/config';
+import { SubscriptionType } from '@ghostfolio/common/enums';
 import { getSum } from '@ghostfolio/common/helper';
 import { PublicPortfolioResponse } from '@ghostfolio/common/interfaces';
 import type { RequestWithUser } from '@ghostfolio/common/types';
@@ -20,7 +21,11 @@ import {
   UseInterceptors
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
-import { Type as ActivityType } from '@prisma/client';
+import {
+  AssetClass,
+  AssetSubClass,
+  Type as ActivityType
+} from '@prisma/client';
 import { Big } from 'big.js';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 
@@ -58,7 +63,7 @@ export class PublicController {
     });
 
     if (this.configurationService.get('ENABLE_FEATURE_SUBSCRIPTION')) {
-      hasDetails = user.subscription.type === 'Premium';
+      hasDetails = user.subscription.type === SubscriptionType.Premium;
     }
 
     const [
@@ -150,11 +155,11 @@ export class PublicController {
     };
 
     const totalValue = getSum(
-      Object.values(holdings).map(({ currency, marketPrice, quantity }) => {
+      Object.values(holdings).map(({ assetProfile, marketPrice, quantity }) => {
         return new Big(
           this.exchangeRateDataService.toCurrency(
             quantity * marketPrice,
-            currency,
+            assetProfile.currency,
             this.request.user?.settings?.settings.baseCurrency ??
               DEFAULT_CURRENCY
           )
@@ -166,19 +171,41 @@ export class PublicController {
       publicPortfolioResponse.holdings[symbol] = {
         allocationInPercentage:
           portfolioPosition.valueInBaseCurrency / totalValue,
-        assetClass: hasDetails ? portfolioPosition.assetClass : undefined,
-        assetProfile: hasDetails ? portfolioPosition.assetProfile : undefined,
-        countries: hasDetails ? portfolioPosition.countries : [],
-        currency: hasDetails ? portfolioPosition.currency : undefined,
-        dataSource: portfolioPosition.dataSource,
+        assetProfile: {
+          ...portfolioPosition.assetProfile,
+          assetClass:
+            hasDetails ||
+            portfolioPosition.assetProfile.assetClass === AssetClass.LIQUIDITY
+              ? portfolioPosition.assetProfile.assetClass
+              : undefined,
+          assetClassLabel:
+            hasDetails ||
+            portfolioPosition.assetProfile.assetClass === AssetClass.LIQUIDITY
+              ? portfolioPosition.assetProfile.assetClassLabel
+              : undefined,
+          assetSubClass:
+            hasDetails ||
+            portfolioPosition.assetProfile.assetSubClass === AssetSubClass.CASH
+              ? portfolioPosition.assetProfile.assetSubClass
+              : undefined,
+          assetSubClassLabel:
+            hasDetails ||
+            portfolioPosition.assetProfile.assetSubClass === AssetSubClass.CASH
+              ? portfolioPosition.assetProfile.assetSubClassLabel
+              : undefined,
+          ...(hasDetails
+            ? {}
+            : {
+                countries: [],
+                currency: undefined,
+                holdings: [],
+                sectors: []
+              })
+        },
         dateOfFirstActivity: portfolioPosition.dateOfFirstActivity,
         markets: hasDetails ? portfolioPosition.markets : undefined,
-        name: portfolioPosition.name,
         netPerformancePercentWithCurrencyEffect:
           portfolioPosition.netPerformancePercentWithCurrencyEffect,
-        sectors: hasDetails ? portfolioPosition.sectors : [],
-        symbol: portfolioPosition.symbol,
-        url: portfolioPosition.url,
         valueInPercentage: portfolioPosition.valueInBaseCurrency / totalValue
       };
     }

@@ -7,7 +7,6 @@ import {
 } from '@ghostfolio/common/interfaces';
 import { ColorScheme } from '@ghostfolio/common/types';
 
-import { CommonModule } from '@angular/common';
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
@@ -37,8 +36,6 @@ import Color from 'color';
 import { NgxSkeletonLoaderModule } from 'ngx-skeleton-loader';
 import OpenColor from 'open-color';
 
-import { translate } from '../i18n';
-
 const {
   blue,
   cyan,
@@ -56,7 +53,7 @@ const {
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, NgxSkeletonLoaderModule],
+  imports: [NgxSkeletonLoaderModule],
   selector: 'gf-portfolio-proportion-chart',
   styleUrls: ['./portfolio-proportion-chart.component.scss'],
   templateUrl: './portfolio-proportion-chart.component.html'
@@ -74,7 +71,7 @@ export class GfPortfolioProportionChartComponent
       value: number;
     };
   } = {};
-  @Input() isInPercent = false;
+  @Input() isInPercentage = false;
   @Input() keys: string[] = [];
   @Input() locale = getLocale();
   @Input() maxItems?: number;
@@ -198,7 +195,7 @@ export class GfPortfolioProportionChartComponent
       });
     }
 
-    if (this.isInPercent) {
+    if (this.isInPercentage) {
       const totalValueInPercentage = getSum(
         Object.values(chartData).map(({ value }) => {
           return value;
@@ -390,7 +387,7 @@ export class GfPortfolioProportionChartComponent
 
                       return value > 0
                         ? isUUID(symbol)
-                          ? (translate(this.data[symbol]?.name) ?? symbol)
+                          ? (this.data[symbol]?.name ?? symbol)
                           : symbol
                         : '';
                     },
@@ -453,7 +450,7 @@ export class GfPortfolioProportionChartComponent
             symbol = $localize`No data available`;
           }
 
-          const name = translate(this.data[symbol]?.name);
+          const name = this.data[symbol]?.name;
 
           let sum = 0;
 
@@ -465,7 +462,7 @@ export class GfPortfolioProportionChartComponent
 
           if ((context.raw as number) === Number.MAX_SAFE_INTEGER) {
             return $localize`No data available`;
-          } else if (this.isInPercent) {
+          } else if (this.isInPercentage) {
             return [`${name ?? symbol}`, `${percentage.toFixed(2)}%`];
           } else {
             const value = context.raw as number;

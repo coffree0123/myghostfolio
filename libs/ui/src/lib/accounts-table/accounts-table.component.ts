@@ -4,7 +4,6 @@ import { GfEntityLogoComponent } from '@ghostfolio/ui/entity-logo';
 import { NotificationService } from '@ghostfolio/ui/notifications';
 import { GfValueComponent } from '@ghostfolio/ui/value';
 
-import { CommonModule } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -37,7 +36,6 @@ import { NgxSkeletonLoaderModule } from 'ngx-skeleton-loader';
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    CommonModule,
     GfEntityLogoComponent,
     GfValueComponent,
     IonIcon,
@@ -64,7 +62,7 @@ export class GfAccountsTableComponent {
   public readonly showBalance = input(true);
   public readonly showFooter = input(true);
   public readonly showValue = input(true);
-  public readonly showValueInBaseCurrency = input(false);
+  public readonly showValueInBaseCurrency = input(true);
   public readonly totalBalanceInBaseCurrency = input<number>();
   public readonly totalValueInBaseCurrency = input<number>();
 

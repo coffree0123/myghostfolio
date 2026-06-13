@@ -1,10 +1,10 @@
-import { TabConfiguration } from '@ghostfolio/common/interfaces';
 import { internalRoutes } from '@ghostfolio/common/routes/routes';
+import {
+  GfPageTabsComponent,
+  TabConfiguration
+} from '@ghostfolio/ui/page-tabs';
 
 import { Component, OnInit } from '@angular/core';
-import { MatTabsModule } from '@angular/material/tabs';
-import { RouterModule } from '@angular/router';
-import { IonIcon } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import {
   flashOutline,
@@ -13,20 +13,18 @@ import {
   serverOutline,
   settingsOutline
 } from 'ionicons/icons';
-import { DeviceDetectorService } from 'ngx-device-detector';
 
 @Component({
-  host: { class: 'page has-tabs' },
-  imports: [IonIcon, MatTabsModule, RouterModule],
+  host: { class: 'page' },
+  imports: [GfPageTabsComponent],
   selector: 'gf-admin-page',
   styleUrls: ['./admin-page.scss'],
   templateUrl: './admin-page.html'
 })
 export class AdminPageComponent implements OnInit {
-  public deviceType: string;
   public tabs: TabConfiguration[] = [];
 
-  public constructor(private deviceService: DeviceDetectorService) {
+  public constructor() {
     addIcons({
       flashOutline,
       peopleOutline,
@@ -37,8 +35,6 @@ export class AdminPageComponent implements OnInit {
   }
 
   public ngOnInit() {
-    this.deviceType = this.deviceService.getDeviceInfo().deviceType;
-
     this.tabs = [
       {
         iconName: 'reader-outline',
@@ -47,11 +43,7 @@ export class AdminPageComponent implements OnInit {
       },
       {
         iconName: 'settings-outline',
-        label:
-          internalRoutes.adminControl.subRoutes.settings.title +
-          '<span class="badge badge-pill badge-secondary ml-2 text-uppercase">' +
-          $localize`new` +
-          '</span>',
+        label: internalRoutes.adminControl.subRoutes.settings.title,
         routerLink: internalRoutes.adminControl.subRoutes.settings.routerLink
       },
       {

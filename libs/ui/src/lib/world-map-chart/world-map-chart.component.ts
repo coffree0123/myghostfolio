@@ -1,4 +1,8 @@
-import { getLocale, getNumberFormatGroup } from '@ghostfolio/common/helper';
+import {
+  getCountryName,
+  getLocale,
+  getNumberFormatGroup
+} from '@ghostfolio/common/helper';
 
 import {
   ChangeDetectionStrategy,
@@ -21,11 +25,11 @@ import svgMap from 'svgmap';
 export class GfWorldMapChartComponent implements OnChanges, OnDestroy {
   @Input() countries: { [code: string]: { name?: string; value: number } };
   @Input() format: string;
-  @Input() isInPercent = false;
+  @Input() isInPercentage = false;
   @Input() locale = getLocale();
 
   public isLoading = true;
-  public svgMapElement;
+  public svgMapElement: any;
 
   public constructor(private changeDetectorRef: ChangeDetectorRef) {}
 
@@ -47,7 +51,7 @@ export class GfWorldMapChartComponent implements OnChanges, OnDestroy {
   }
 
   private initialize() {
-    if (this.isInPercent) {
+    if (this.isInPercentage) {
       // Convert value of countries to percentage
       let sum = 0;
       Object.keys(this.countries).map((country) => {
@@ -87,6 +91,14 @@ export class GfWorldMapChartComponent implements OnChanges, OnDestroy {
       maxZoom: 1.06,
       targetElementID: 'svgMap'
     });
+
+    this.svgMapElement.options.countryNames = Object.keys(
+      this.svgMapElement.countries
+    ).reduce<{ [code: string]: string }>((names, code) => {
+      names[code] = getCountryName({ code, locale: this.locale });
+
+      return names;
+    }, {});
 
     setTimeout(() => {
       this.isLoading = false;

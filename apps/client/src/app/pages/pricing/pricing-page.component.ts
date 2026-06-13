@@ -7,14 +7,15 @@ import { NotificationService } from '@ghostfolio/ui/notifications';
 import { GfPremiumIndicatorComponent } from '@ghostfolio/ui/premium-indicator';
 import { DataService } from '@ghostfolio/ui/services';
 
-import { CommonModule } from '@angular/common';
 import {
   ChangeDetectorRef,
   Component,
   CUSTOM_ELEMENTS_SCHEMA,
-  OnDestroy,
+  DestroyRef,
+  inject,
   OnInit
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -27,13 +28,12 @@ import {
   informationCircleOutline
 } from 'ionicons/icons';
 import { StringValue } from 'ms';
-import { EMPTY, Subject } from 'rxjs';
-import { catchError, takeUntil } from 'rxjs/operators';
+import { EMPTY } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 
 @Component({
   host: { class: 'page' },
   imports: [
-    CommonModule,
     GfPremiumIndicatorComponent,
     IonIcon,
     MatButtonModule,
@@ -46,36 +46,29 @@ import { catchError, takeUntil } from 'rxjs/operators';
   styleUrls: ['./pricing-page.scss'],
   templateUrl: './pricing-page.html'
 })
-export class GfPricingPageComponent implements OnDestroy, OnInit {
-  public baseCurrency: string;
-  public coupon: number;
-  public couponId: string;
-  public durationExtension: StringValue;
-  public hasPermissionToCreateUser: boolean;
-  public hasPermissionToUpdateUserSettings: boolean;
+export class GfPricingPageComponent implements OnInit {
+  protected baseCurrency: string;
+  protected coupon: number | undefined;
+  protected durationExtension: StringValue | undefined;
+  protected hasPermissionToCreateUser: boolean;
+  protected hasPermissionToUpdateUserSettings: boolean;
 
-  public importAndExportTooltipBasic = translate(
+  protected readonly importAndExportTooltipBasic = translate(
     'DATA_IMPORT_AND_EXPORT_TOOLTIP_BASIC'
   );
 
-  public importAndExportTooltipOSS = translate(
+  protected readonly importAndExportTooltipOSS = translate(
     'DATA_IMPORT_AND_EXPORT_TOOLTIP_OSS'
   );
 
-  public importAndExportTooltipPremium = translate(
-    'DATA_IMPORT_AND_EXPORT_TOOLTIP_PREMIUM'
-  );
+  protected label: string | undefined;
+  protected price: number | undefined;
 
-  public isLoggedIn: boolean;
-  public label: string;
-  public price: number;
-  public priceId: string;
-
-  public professionalDataProviderTooltipPremium = translate(
+  protected readonly professionalDataProviderTooltipPremium = translate(
     'PROFESSIONAL_DATA_PROVIDER_TOOLTIP_PREMIUM'
   );
 
-  public referralBrokers = [
+  protected readonly referralBrokers = [
     'Alpian',
     'DEGIRO',
     'finpension',
@@ -83,23 +76,26 @@ export class GfPricingPageComponent implements OnDestroy, OnInit {
     'Interactive Brokers',
     'Mintos',
     'Monefit SmartSaver',
+    'Revolut',
     'Swissquote',
     'VIAC',
     'Zak'
-  ];
+  ] as const;
 
-  public routerLinkFeatures = publicRoutes.features.routerLink;
-  public routerLinkRegister = publicRoutes.register.routerLink;
-  public user: User;
+  protected readonly routerLinkFeatures = publicRoutes.features.routerLink;
+  protected readonly routerLinkRegister = publicRoutes.register.routerLink;
+  protected user: User;
 
-  private unsubscribeSubject = new Subject<void>();
+  private couponId: string | undefined;
+  private priceId: string;
 
-  public constructor(
-    private changeDetectorRef: ChangeDetectorRef,
-    private dataService: DataService,
-    private notificationService: NotificationService,
-    private userService: UserService
-  ) {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+  private readonly dataService = inject(DataService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly notificationService = inject(NotificationService);
+  private readonly userService = inject(UserService);
+
+  public constructor() {
     addIcons({
       checkmarkCircleOutline,
       checkmarkOutline,
@@ -124,7 +120,7 @@ export class GfPricingPageComponent implements OnDestroy, OnInit {
     this.price = subscriptionOffer?.price;
 
     this.userService.stateChanged
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((state) => {
         if (state?.user) {
           this.user = state.user;
@@ -147,7 +143,7 @@ export class GfPricingPageComponent implements OnDestroy, OnInit {
       });
   }
 
-  public onCheckout() {
+  protected onCheckout() {
     this.dataService
       .createStripeCheckoutSession({
         couponId: this.couponId,
@@ -161,15 +157,10 @@ export class GfPricingPageComponent implements OnDestroy, OnInit {
 
           return EMPTY;
         }),
-        takeUntil(this.unsubscribeSubject)
+        takeUntilDestroyed(this.destroyRef)
       )
       .subscribe(({ sessionUrl }) => {
         window.location.href = sessionUrl;
       });
-  }
-
-  public ngOnDestroy() {
-    this.unsubscribeSubject.next();
-    this.unsubscribeSubject.complete();
   }
 }

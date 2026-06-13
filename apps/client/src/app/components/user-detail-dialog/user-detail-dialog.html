@@ -1,6 +1,6 @@
-<div class="d-flex justify-content-end">
+<div class="align-items-center d-flex justify-content-end" mat-dialog-title>
   <button
-    class="mx-1 no-min-width px-2"
+    class="ml-1 no-min-width px-2"
     mat-button
     type="button"
     [matMenuTriggerFor]="userDetailActionsMenu"
@@ -27,7 +27,13 @@
   <div class="container p-0">
     <div class="mb-3 row">
       <div class="col-6 mb-3">
-        <gf-value i18n size="medium" [value]="user?.id">User ID</gf-value>
+        <gf-value
+          i18n
+          size="medium"
+          [enableCopyToClipboardButton]="true"
+          [value]="user?.id"
+          >User ID</gf-value
+        >
       </div>
       <div class="col-6 mb-3">
         <gf-value i18n size="medium" [value]="user?.role">Role</gf-value>

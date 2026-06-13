@@ -12,23 +12,25 @@ import {
 import { hasPermission, permissions } from '@ghostfolio/common/permissions';
 import { DateRange } from '@ghostfolio/common/types';
 import { GfActivitiesTableComponent } from '@ghostfolio/ui/activities-table';
+import { GfFabComponent } from '@ghostfolio/ui/fab';
 import { DataService } from '@ghostfolio/ui/services';
 
-import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
-import { MatButtonModule } from '@angular/material/button';
+import {
+  ChangeDetectorRef,
+  Component,
+  DestroyRef,
+  OnInit
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { PageEvent } from '@angular/material/paginator';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { Sort, SortDirection } from '@angular/material/sort';
 import { MatTableDataSource } from '@angular/material/table';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import { IonIcon } from '@ionic/angular/standalone';
 import { format, parseISO } from 'date-fns';
-import { addIcons } from 'ionicons';
-import { addOutline } from 'ionicons/icons';
 import { DeviceDetectorService } from 'ngx-device-detector';
-import { Subject, Subscription } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { Subscription } from 'rxjs';
 
 import { GfCreateOrUpdateActivityDialogComponent } from './create-or-update-activity-dialog/create-or-update-activity-dialog.component';
 import { CreateOrUpdateActivityDialogParams } from './create-or-update-activity-dialog/interfaces/interfaces';
@@ -36,11 +38,9 @@ import { GfImportActivitiesDialogComponent } from './import-activities-dialog/im
 import { ImportActivitiesDialogParams } from './import-activities-dialog/interfaces/interfaces';
 
 @Component({
-  host: { class: 'has-fab' },
   imports: [
     GfActivitiesTableComponent,
-    IonIcon,
-    MatButtonModule,
+    GfFabComponent,
     MatSnackBarModule,
     RouterModule
   ],
@@ -48,7 +48,8 @@ import { ImportActivitiesDialogParams } from './import-activities-dialog/interfa
   styleUrls: ['./activities-page.scss'],
   templateUrl: './activities-page.html'
 })
-export class GfActivitiesPageComponent implements OnDestroy, OnInit {
+export class GfActivitiesPageComponent implements OnInit {
+  public activityTypesFilter: string[] = [];
   public dataSource: MatTableDataSource<Activity>;
   public deviceType: string;
   public hasImpersonationId: boolean;
@@ -59,15 +60,14 @@ export class GfActivitiesPageComponent implements OnDestroy, OnInit {
   public routeQueryParams: Subscription;
   public sortColumn = 'date';
   public sortDirection: SortDirection = 'desc';
-  public totalItems: number;
+  public totalItems: number | undefined;
   public user: User;
-
-  private unsubscribeSubject = new Subject<void>();
 
   public constructor(
     private changeDetectorRef: ChangeDetectorRef,
     private dataService: DataService,
-    private deviceService: DeviceDetectorService,
+    private destroyRef: DestroyRef,
+    private deviceDetectorService: DeviceDetectorService,
     private dialog: MatDialog,
     private icsService: IcsService,
     private impersonationStorageService: ImpersonationStorageService,
@@ -76,13 +76,13 @@ export class GfActivitiesPageComponent implements OnDestroy, OnInit {
     private userService: UserService
   ) {
     this.routeQueryParams = route.queryParams
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((params) => {
         if (params['createDialog']) {
           if (params['activityId']) {
             this.dataService
               .fetchActivity(params['activityId'])
-              .pipe(takeUntil(this.unsubscribeSubject))
+              .pipe(takeUntilDestroyed(this.destroyRef))
               .subscribe((activity) => {
                 this.openCreateActivityDialog(activity);
               });
@@ -93,7 +93,7 @@ export class GfActivitiesPageComponent implements OnDestroy, OnInit {
           if (params['activityId']) {
             this.dataService
               .fetchActivity(params['activityId'])
-              .pipe(takeUntil(this.unsubscribeSubject))
+              .pipe(takeUntilDestroyed(this.destroyRef))
               .subscribe((activity) => {
                 this.openUpdateActivityDialog(activity);
               });
@@ -102,22 +102,20 @@ export class GfActivitiesPageComponent implements OnDestroy, OnInit {
           }
         }
       });
-
-    addIcons({ addOutline });
   }
 
   public ngOnInit() {
-    this.deviceType = this.deviceService.getDeviceInfo().deviceType;
+    this.deviceType = this.deviceDetectorService.getDeviceInfo().deviceType;
 
     this.impersonationStorageService
       .onChangeHasImpersonation()
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((impersonationId) => {
         this.hasImpersonationId = !!impersonationId;
       });
 
     this.userService.stateChanged
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((state) => {
         if (state?.user) {
           this.updateUser(state.user);
@@ -130,20 +128,26 @@ export class GfActivitiesPageComponent implements OnDestroy, OnInit {
   }
 
   public fetchActivities() {
-    const dateRange = this.user?.settings?.dateRange;
+    // Reset dataSource and totalItems to show loading state
+    this.dataSource = undefined;
+    this.totalItems = undefined;
 
+    const dateRange = this.user?.settings?.dateRange;
     const range = this.isCalendarYear(dateRange) ? dateRange : undefined;
 
     this.dataService
       .fetchActivities({
         range,
+        activityTypes: this.activityTypesFilter.length
+          ? this.activityTypesFilter
+          : undefined,
         filters: this.userService.getFilters(),
         skip: this.pageIndex * this.pageSize,
         sortColumn: this.sortColumn,
         sortDirection: this.sortDirection,
         take: this.pageSize
       })
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(({ activities, count }) => {
         this.dataSource = new MatTableDataSource(activities);
         this.totalItems = count;
@@ -184,28 +188,32 @@ export class GfActivitiesPageComponent implements OnDestroy, OnInit {
       .deleteActivities({
         filters: this.userService.getFilters()
       })
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         this.userService
           .get(true)
-          .pipe(takeUntil(this.unsubscribeSubject))
+          .pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe();
 
         this.fetchActivities();
+
+        this.changeDetectorRef.markForCheck();
       });
   }
 
   public onDeleteActivity(aId: string) {
     this.dataService
       .deleteActivity(aId)
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         this.userService
           .get(true)
-          .pipe(takeUntil(this.unsubscribeSubject))
+          .pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe();
 
         this.fetchActivities();
+
+        this.changeDetectorRef.markForCheck();
       });
   }
 
@@ -213,12 +221,17 @@ export class GfActivitiesPageComponent implements OnDestroy, OnInit {
     let fetchExportParams: any = { activityIds };
 
     if (!activityIds) {
-      fetchExportParams = { filters: this.userService.getFilters() };
+      fetchExportParams = {
+        activityTypes: this.activityTypesFilter.length
+          ? this.activityTypesFilter
+          : undefined,
+        filters: this.userService.getFilters()
+      };
     }
 
     this.dataService
       .fetchExport(fetchExportParams)
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((data) => {
         for (const activity of data.activities) {
           delete activity.id;
@@ -238,7 +251,7 @@ export class GfActivitiesPageComponent implements OnDestroy, OnInit {
   public onExportDrafts(activityIds?: string[]) {
     this.dataService
       .fetchExport({ activityIds })
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((data) => {
         downloadAsFile({
           content: this.icsService.transformActivitiesToIcsContent(
@@ -268,14 +281,16 @@ export class GfActivitiesPageComponent implements OnDestroy, OnInit {
 
     dialogRef
       .afterClosed()
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         this.userService
           .get(true)
-          .pipe(takeUntil(this.unsubscribeSubject))
+          .pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe();
 
         this.fetchActivities();
+
+        this.changeDetectorRef.markForCheck();
       });
   }
 
@@ -295,14 +310,16 @@ export class GfActivitiesPageComponent implements OnDestroy, OnInit {
 
     dialogRef
       .afterClosed()
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         this.userService
           .get(true)
-          .pipe(takeUntil(this.unsubscribeSubject))
+          .pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe();
 
         this.fetchActivities();
+
+        this.changeDetectorRef.markForCheck();
       });
   }
 
@@ -310,6 +327,13 @@ export class GfActivitiesPageComponent implements OnDestroy, OnInit {
     this.pageIndex = 0;
     this.sortColumn = active;
     this.sortDirection = direction;
+
+    this.fetchActivities();
+  }
+
+  public onTypesFilterChanged(aTypes: string[]) {
+    this.activityTypesFilter = aTypes;
+    this.pageIndex = 0;
 
     this.fetchActivities();
   }
@@ -336,26 +360,23 @@ export class GfActivitiesPageComponent implements OnDestroy, OnInit {
 
     dialogRef
       .afterClosed()
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((activity: UpdateOrderDto) => {
         if (activity) {
           this.dataService
             .putActivity(activity)
-            .pipe(takeUntil(this.unsubscribeSubject))
+            .pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe({
               next: () => {
                 this.fetchActivities();
+
+                this.changeDetectorRef.markForCheck();
               }
             });
         }
 
         this.router.navigate(['.'], { relativeTo: this.route });
       });
-  }
-
-  public ngOnDestroy() {
-    this.unsubscribeSubject.next();
-    this.unsubscribeSubject.complete();
   }
 
   private isCalendarYear(dateRange: DateRange) {
@@ -369,7 +390,7 @@ export class GfActivitiesPageComponent implements OnDestroy, OnInit {
   private openCreateActivityDialog(aActivity?: Activity) {
     this.userService
       .get()
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((user) => {
         this.updateUser(user);
 
@@ -396,17 +417,19 @@ export class GfActivitiesPageComponent implements OnDestroy, OnInit {
 
         dialogRef
           .afterClosed()
-          .pipe(takeUntil(this.unsubscribeSubject))
+          .pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe((transaction: CreateOrderDto | null) => {
             if (transaction) {
               this.dataService.postActivity(transaction).subscribe({
                 next: () => {
                   this.userService
                     .get(true)
-                    .pipe(takeUntil(this.unsubscribeSubject))
+                    .pipe(takeUntilDestroyed(this.destroyRef))
                     .subscribe();
 
                   this.fetchActivities();
+
+                  this.changeDetectorRef.markForCheck();
                 }
               });
             }

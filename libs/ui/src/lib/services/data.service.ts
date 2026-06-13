@@ -209,6 +209,7 @@ export class DataService {
   }
 
   public fetchActivities({
+    activityTypes,
     filters,
     range,
     skip,
@@ -216,6 +217,7 @@ export class DataService {
     sortDirection,
     take
   }: {
+    activityTypes?: string[];
     filters?: Filter[];
     range?: DateRange;
     skip?: number;
@@ -224,6 +226,10 @@ export class DataService {
     take?: number;
   }): Observable<ActivitiesResponse> {
     let params = this.buildFiltersAsQueryParams({ filters });
+
+    if (activityTypes?.length) {
+      params = params.append('activityTypes', activityTypes.join(','));
+    }
 
     if (range) {
       params = params.append('range', range);
@@ -411,15 +417,21 @@ export class DataService {
 
   public fetchExport({
     activityIds,
+    activityTypes,
     filters
   }: {
     activityIds?: string[];
+    activityTypes?: string[];
     filters?: Filter[];
   } = {}) {
     let params = this.buildFiltersAsQueryParams({ filters });
 
     if (activityIds) {
       params = params.append('activityIds', activityIds.join(','));
+    }
+
+    if (activityTypes?.length) {
+      params = params.append('activityTypes', activityTypes.join(','));
     }
 
     return this.http.get<ExportResponse>('/api/v1/export', {
@@ -544,13 +556,11 @@ export class DataService {
         map((response) => {
           if (response.holdings) {
             for (const symbol of Object.keys(response.holdings)) {
-              response.holdings[symbol].assetClassLabel = translate(
-                response.holdings[symbol].assetClass
-              );
+              response.holdings[symbol].assetProfile.assetClassLabel =
+                translate(response.holdings[symbol].assetProfile.assetClass);
 
-              response.holdings[symbol].assetSubClassLabel = translate(
-                response.holdings[symbol].assetSubClass
-              );
+              response.holdings[symbol].assetProfile.assetSubClassLabel =
+                translate(response.holdings[symbol].assetProfile.assetSubClass);
 
               response.holdings[symbol].dateOfFirstActivity = response.holdings[
                 symbol
@@ -598,13 +608,11 @@ export class DataService {
         map((response) => {
           if (response.holdings) {
             for (const symbol of Object.keys(response.holdings)) {
-              response.holdings[symbol].assetClassLabel = translate(
-                response.holdings[symbol].assetClass
-              );
+              response.holdings[symbol].assetProfile.assetClassLabel =
+                translate(response.holdings[symbol].assetProfile.assetClass);
 
-              response.holdings[symbol].assetSubClassLabel = translate(
-                response.holdings[symbol].assetSubClass
-              );
+              response.holdings[symbol].assetProfile.assetSubClassLabel =
+                translate(response.holdings[symbol].assetProfile.assetSubClass);
 
               response.holdings[symbol].dateOfFirstActivity = response.holdings[
                 symbol
@@ -687,6 +695,12 @@ export class DataService {
         map((response) => {
           if (response.holdings) {
             for (const symbol of Object.keys(response.holdings)) {
+              response.holdings[symbol].assetProfile.assetClassLabel =
+                translate(response.holdings[symbol].assetProfile.assetClass);
+
+              response.holdings[symbol].assetProfile.assetSubClassLabel =
+                translate(response.holdings[symbol].assetProfile.assetSubClass);
+
               response.holdings[symbol].valueInBaseCurrency = isNumber(
                 response.holdings[symbol].valueInBaseCurrency
               )

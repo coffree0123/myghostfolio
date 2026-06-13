@@ -36,6 +36,10 @@ export class UpdateAssetProfileDto {
   @IsOptional()
   dataSource?: DataSource;
 
+  @IsArray()
+  @IsOptional()
+  holdings?: Prisma.InputJsonArray;
+
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
@@ -64,7 +68,7 @@ export class UpdateAssetProfileDto {
 
   @IsOptional()
   @IsUrl({
-    protocols: ['https'],
+    protocols: ['http', 'https'],
     require_protocol: true
   })
   url?: string;

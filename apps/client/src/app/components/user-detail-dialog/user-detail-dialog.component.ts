@@ -7,10 +7,11 @@ import {
   ChangeDetectorRef,
   Component,
   CUSTOM_ELEMENTS_SCHEMA,
+  DestroyRef,
   Inject,
-  OnDestroy,
   OnInit
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatDialogModule } from '@angular/material/dialog';
@@ -18,10 +19,13 @@ import { MatMenuModule } from '@angular/material/menu';
 import { IonIcon } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import { ellipsisVertical } from 'ionicons/icons';
-import { EMPTY, Subject } from 'rxjs';
-import { catchError, takeUntil } from 'rxjs/operators';
+import { EMPTY } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 
-import { UserDetailDialogParams } from './interfaces/interfaces';
+import {
+  UserDetailDialogParams,
+  UserDetailDialogResult
+} from './interfaces/interfaces';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -38,16 +42,18 @@ import { UserDetailDialogParams } from './interfaces/interfaces';
   styleUrls: ['./user-detail-dialog.component.scss'],
   templateUrl: './user-detail-dialog.html'
 })
-export class GfUserDetailDialogComponent implements OnDestroy, OnInit {
+export class GfUserDetailDialogComponent implements OnInit {
   public user: AdminUserResponse;
-
-  private unsubscribeSubject = new Subject<void>();
 
   public constructor(
     private adminService: AdminService,
     private changeDetectorRef: ChangeDetectorRef,
     @Inject(MAT_DIALOG_DATA) public data: UserDetailDialogParams,
-    public dialogRef: MatDialogRef<GfUserDetailDialogComponent>
+    private destroyRef: DestroyRef,
+    public dialogRef: MatDialogRef<
+      GfUserDetailDialogComponent,
+      UserDetailDialogResult
+    >
   ) {
     addIcons({
       ellipsisVertical
@@ -58,7 +64,7 @@ export class GfUserDetailDialogComponent implements OnDestroy, OnInit {
     this.adminService
       .fetchUserById(this.data.userId)
       .pipe(
-        takeUntil(this.unsubscribeSubject),
+        takeUntilDestroyed(this.destroyRef),
         catchError(() => {
           this.dialogRef.close();
 
@@ -81,10 +87,5 @@ export class GfUserDetailDialogComponent implements OnDestroy, OnInit {
 
   public onClose() {
     this.dialogRef.close();
-  }
-
-  public ngOnDestroy() {
-    this.unsubscribeSubject.next();
-    this.unsubscribeSubject.complete();
   }
 }

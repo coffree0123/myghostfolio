@@ -3,14 +3,16 @@ import { validateObjectForForm } from '@ghostfolio/common/utils';
 import { NotificationService } from '@ghostfolio/ui/notifications';
 import { DataService } from '@ghostfolio/ui/services';
 
+import type { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
-  Inject,
-  OnDestroy,
+  DestroyRef,
+  inject,
   OnInit
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   FormBuilder,
   FormGroup,
@@ -27,8 +29,9 @@ import {
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { AccessPermission } from '@prisma/client';
 import { StatusCodes } from 'http-status-codes';
-import { EMPTY, Subject, catchError, takeUntil } from 'rxjs';
+import { EMPTY, catchError } from 'rxjs';
 
 import { CreateOrUpdateAccessDialogParams } from './interfaces/interfaces';
 
@@ -48,64 +51,76 @@ import { CreateOrUpdateAccessDialogParams } from './interfaces/interfaces';
   styleUrls: ['./create-or-update-access-dialog.scss'],
   templateUrl: 'create-or-update-access-dialog.html'
 })
-export class GfCreateOrUpdateAccessDialogComponent
-  implements OnDestroy, OnInit
-{
-  public accessForm: FormGroup;
-  public mode: 'create' | 'update';
+export class GfCreateOrUpdateAccessDialogComponent implements OnInit {
+  protected accessForm: FormGroup;
+  protected readonly mode: 'create' | 'update';
 
-  private unsubscribeSubject = new Subject<void>();
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
 
-  public constructor(
-    private changeDetectorRef: ChangeDetectorRef,
-    @Inject(MAT_DIALOG_DATA) private data: CreateOrUpdateAccessDialogParams,
-    public dialogRef: MatDialogRef<GfCreateOrUpdateAccessDialogComponent>,
-    private dataService: DataService,
-    private formBuilder: FormBuilder,
-    private notificationService: NotificationService
-  ) {
-    this.mode = this.data.access?.id ? 'update' : 'create';
+  private readonly data =
+    inject<CreateOrUpdateAccessDialogParams>(MAT_DIALOG_DATA);
+
+  private readonly dataService = inject(DataService);
+  private readonly destroyRef = inject(DestroyRef);
+
+  private readonly dialogRef =
+    inject<MatDialogRef<GfCreateOrUpdateAccessDialogComponent>>(MatDialogRef);
+
+  private readonly formBuilder = inject(FormBuilder);
+  private readonly notificationService = inject(NotificationService);
+
+  public constructor() {
+    this.mode = this.data.access ? 'update' : 'create';
   }
 
   public ngOnInit() {
-    const isPublic = this.data.access.type === 'PUBLIC';
+    const access = this.data?.access;
+    const isPublic = access?.type === 'PUBLIC';
 
     this.accessForm = this.formBuilder.group({
-      alias: [this.data.access.alias],
+      alias: [access?.alias ?? ''],
       granteeUserId: [
-        this.data.access.grantee,
+        access?.grantee ?? null,
         isPublic ? null : Validators.required
       ],
-      permissions: [this.data.access.permissions[0], Validators.required],
+      permissions: [
+        access?.permissions[0] ?? AccessPermission.READ_RESTRICTED,
+        Validators.required
+      ],
       type: [
-        { disabled: this.mode === 'update', value: this.data.access.type },
+        { disabled: this.mode === 'update', value: access?.type ?? 'PRIVATE' },
         Validators.required
       ]
     });
 
-    this.accessForm.get('type').valueChanges.subscribe((accessType) => {
-      const granteeUserIdControl = this.accessForm.get('granteeUserId');
-      const permissionsControl = this.accessForm.get('permissions');
+    this.accessForm
+      .get('type')
+      ?.valueChanges.pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((accessType) => {
+        const granteeUserIdControl = this.accessForm.get('granteeUserId');
+        const permissionsControl = this.accessForm.get('permissions');
 
-      if (accessType === 'PRIVATE') {
-        granteeUserIdControl.setValidators(Validators.required);
-      } else {
-        granteeUserIdControl.clearValidators();
-        granteeUserIdControl.setValue(null);
-        permissionsControl.setValue(this.data.access.permissions[0]);
-      }
+        if (accessType === 'PRIVATE') {
+          granteeUserIdControl?.setValidators(Validators.required);
+        } else {
+          granteeUserIdControl?.clearValidators();
+          granteeUserIdControl?.setValue(null);
+          permissionsControl?.setValue(
+            access?.permissions[0] ?? AccessPermission.READ_RESTRICTED
+          );
+        }
 
-      granteeUserIdControl.updateValueAndValidity();
+        granteeUserIdControl?.updateValueAndValidity();
 
-      this.changeDetectorRef.markForCheck();
-    });
+        this.changeDetectorRef.markForCheck();
+      });
   }
 
-  public onCancel() {
+  protected onCancel() {
     this.dialogRef.close();
   }
 
-  public async onSubmit() {
+  protected async onSubmit() {
     if (this.mode === 'create') {
       await this.createAccess();
     } else {
@@ -113,16 +128,11 @@ export class GfCreateOrUpdateAccessDialogComponent
     }
   }
 
-  public ngOnDestroy() {
-    this.unsubscribeSubject.next();
-    this.unsubscribeSubject.complete();
-  }
-
   private async createAccess() {
     const access: CreateAccessDto = {
-      alias: this.accessForm.get('alias').value,
-      granteeUserId: this.accessForm.get('granteeUserId').value,
-      permissions: [this.accessForm.get('permissions').value]
+      alias: this.accessForm.get('alias')?.value,
+      granteeUserId: this.accessForm.get('granteeUserId')?.value,
+      permissions: [this.accessForm.get('permissions')?.value]
     };
 
     try {
@@ -135,7 +145,7 @@ export class GfCreateOrUpdateAccessDialogComponent
       this.dataService
         .postAccess(access)
         .pipe(
-          catchError((error) => {
+          catchError((error: HttpErrorResponse) => {
             if (error.status === StatusCodes.BAD_REQUEST) {
               this.notificationService.alert({
                 title: $localize`Oops! Could not grant access.`
@@ -144,7 +154,7 @@ export class GfCreateOrUpdateAccessDialogComponent
 
             return EMPTY;
           }),
-          takeUntil(this.unsubscribeSubject)
+          takeUntilDestroyed(this.destroyRef)
         )
         .subscribe(() => {
           this.dialogRef.close(access);
@@ -155,11 +165,17 @@ export class GfCreateOrUpdateAccessDialogComponent
   }
 
   private async updateAccess() {
+    const accessId = this.data.access?.id;
+
+    if (!accessId) {
+      return;
+    }
+
     const access: UpdateAccessDto = {
-      alias: this.accessForm.get('alias').value,
-      granteeUserId: this.accessForm.get('granteeUserId').value,
-      id: this.data.access.id,
-      permissions: [this.accessForm.get('permissions').value]
+      alias: this.accessForm.get('alias')?.value,
+      granteeUserId: this.accessForm.get('granteeUserId')?.value,
+      id: accessId,
+      permissions: [this.accessForm.get('permissions')?.value]
     };
 
     try {
@@ -172,8 +188,8 @@ export class GfCreateOrUpdateAccessDialogComponent
       this.dataService
         .putAccess(access)
         .pipe(
-          catchError(({ status }) => {
-            if (status.status === StatusCodes.BAD_REQUEST) {
+          catchError(({ status }: HttpErrorResponse) => {
+            if (status === StatusCodes.BAD_REQUEST) {
               this.notificationService.alert({
                 title: $localize`Oops! Could not update access.`
               });
@@ -181,7 +197,7 @@ export class GfCreateOrUpdateAccessDialogComponent
 
             return EMPTY;
           }),
-          takeUntil(this.unsubscribeSubject)
+          takeUntilDestroyed(this.destroyRef)
         )
         .subscribe(() => {
           this.dialogRef.close(access);

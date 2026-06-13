@@ -27,9 +27,10 @@ export class AssetClassClusterRiskEquity extends Rule<Settings> {
   public evaluate(ruleSettings: Settings) {
     const holdingsGroupedByAssetClass = this.groupCurrentHoldingsByAttribute(
       this.holdings,
-      'assetClass',
+      'assetProfile.assetClass',
       ruleSettings.baseCurrency
     );
+
     let totalValue = 0;
 
     const equityValueInBaseCurrency =
@@ -83,13 +84,6 @@ export class AssetClassClusterRiskEquity extends Rule<Settings> {
       }),
       value: true
     };
-  }
-
-  public getCategoryName() {
-    return this.i18nService.getTranslation({
-      id: 'rule.assetClassClusterRisk.category',
-      languageCode: this.getLanguageCode()
-    });
   }
 
   public getConfiguration() {

@@ -10,7 +10,6 @@ import {
 } from '@ghostfolio/common/interfaces';
 import { ColorScheme, DateRange } from '@ghostfolio/common/types';
 
-import { CommonModule } from '@angular/common';
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
@@ -45,7 +44,7 @@ const { gray, green, red } = OpenColor;
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, NgxSkeletonLoaderModule],
+  imports: [NgxSkeletonLoaderModule],
   selector: 'gf-treemap-chart',
   styleUrls: ['./treemap-chart.component.scss'],
   templateUrl: './treemap-chart.component.html'
@@ -280,8 +279,8 @@ export class GfTreemapChartComponent
                 );
               }
 
-              const name = raw._data.name;
-              const symbol = raw._data.symbol;
+              const name = raw._data.assetProfile.name;
+              const symbol = raw._data.assetProfile.symbol;
 
               return [
                 isUUID(symbol) ? (name ?? symbol) : symbol,
@@ -322,8 +321,10 @@ export class GfTreemapChartComponent
                   ['desc']
                 ) as PortfolioPosition[];
 
-                const dataSource: DataSource = dataset[dataIndex].dataSource;
-                const symbol: string = dataset[dataIndex].symbol;
+                const dataSource: DataSource =
+                  dataset[dataIndex].assetProfile.dataSource;
+
+                const symbol: string = dataset[dataIndex].assetProfile.symbol;
 
                 this.treemapChartClicked.emit({ dataSource, symbol });
               } catch {}
@@ -357,10 +358,12 @@ export class GfTreemapChartComponent
       callbacks: {
         label: ({ raw }: GfTreemapTooltipItem) => {
           const allocationInPercentage = `${(raw._data.allocationInPercentage * 100).toFixed(2)}%`;
-          const name = raw._data.name;
+          const name = raw._data.assetProfile.name;
+
           const sign =
             raw._data.netPerformancePercentWithCurrencyEffect > 0 ? '+' : '';
-          const symbol = raw._data.symbol;
+
+          const symbol = raw._data.assetProfile.symbol;
 
           const netPerformanceInPercentageWithSign = `${sign}${(raw._data.netPerformancePercentWithCurrencyEffect * 100).toFixed(2)}%`;
 

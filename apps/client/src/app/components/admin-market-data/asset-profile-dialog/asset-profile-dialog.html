@@ -1,10 +1,10 @@
 <div class="d-flex flex-column h-100">
-  <div class="d-flex mb-3">
-    <h1 class="flex-grow-1 m-0" mat-dialog-title>
-      {{ assetProfile?.name ?? data.symbol }}
-    </h1>
+  <div class="align-items-center d-flex mb-3" mat-dialog-title>
+    <span class="flex-grow-1 text-truncate">{{
+      assetProfile?.name ?? data.symbol
+    }}</span>
     <button
-      class="mx-1 no-min-width px-2"
+      class="ml-1 no-min-width px-2"
       mat-button
       type="button"
       [matMenuTriggerFor]="assetProfileActionsMenu"
@@ -70,7 +70,7 @@
         mat-menu-item
         type="button"
         [disabled]="
-          !adminMarketDataService.hasPermissionToDeleteAssetProfile({
+          !canDeleteAssetProfile({
             activitiesCount: assetProfile?.activitiesCount,
             isBenchmark: isBenchmark,
             symbol: data.symbol,
@@ -258,7 +258,7 @@
                       i18n
                       size="medium"
                       [locale]="data.locale"
-                      [value]="assetProfile?.sectors[0].name"
+                      [value]="translate(assetProfile?.sectors[0].name)"
                       >Sector</gf-value
                     >
                   </div>
@@ -269,7 +269,12 @@
                       i18n
                       size="medium"
                       [locale]="data.locale"
-                      [value]="assetProfile?.countries[0].name"
+                      [value]="
+                        getCountryName({
+                          code: assetProfile?.countries[0].code,
+                          locale: data.locale
+                        })
+                      "
                       >Country</gf-value
                     >
                   </div>
@@ -280,7 +285,7 @@
                   <gf-portfolio-proportion-chart
                     [colorScheme]="data.colorScheme"
                     [data]="sectors"
-                    [isInPercent]="true"
+                    [isInPercentage]="true"
                     [keys]="['name']"
                     [maxItems]="10"
                   />
@@ -290,7 +295,7 @@
                   <gf-portfolio-proportion-chart
                     [colorScheme]="data.colorScheme"
                     [data]="countries"
-                    [isInPercent]="true"
+                    [isInPercentage]="true"
                     [keys]="['name']"
                     [maxItems]="10"
                   />
@@ -393,39 +398,37 @@
                 ></textarea>
               </mat-form-field>
             </div>
-            @if (assetProfile?.dataSource === 'MANUAL') {
-              <div>
-                <mat-form-field appearance="outline" class="w-100">
-                  <mat-label i18n>Sectors</mat-label>
-                  <textarea
-                    cdkTextareaAutosize
-                    formControlName="sectors"
-                    matInput
-                    type="text"
-                  ></textarea>
-                </mat-form-field>
-              </div>
-              <div>
-                <mat-form-field appearance="outline" class="w-100">
-                  <mat-label i18n>Countries</mat-label>
-                  <textarea
-                    cdkTextareaAutosize
-                    formControlName="countries"
-                    matInput
-                    type="text"
-                  ></textarea>
-                </mat-form-field>
-              </div>
-            }
+            <div>
+              <mat-form-field appearance="outline" class="w-100">
+                <mat-label i18n>Sectors</mat-label>
+                <textarea
+                  cdkTextareaAutosize
+                  formControlName="sectors"
+                  matInput
+                  type="text"
+                ></textarea>
+              </mat-form-field>
+            </div>
+            <div>
+              <mat-form-field appearance="outline" class="w-100">
+                <mat-label i18n>Countries</mat-label>
+                <textarea
+                  cdkTextareaAutosize
+                  formControlName="countries"
+                  matInput
+                  type="text"
+                ></textarea>
+              </mat-form-field>
+            </div>
             <div>
               <mat-form-field appearance="outline" class="w-100 without-hint">
                 <mat-label i18n>Url</mat-label>
                 <input formControlName="url" matInput type="text" />
-                @if (assetProfileForm.get('url').value) {
+                @if (assetProfileForm.controls.url.value) {
                   <gf-entity-logo
-                    class="mr-3"
+                    class="mat-icon"
                     matSuffix
-                    [url]="assetProfileForm.get('url').value"
+                    [url]="assetProfileForm.controls.url.value"
                   />
                 }
               </mat-form-field>

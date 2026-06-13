@@ -1,3 +1,5 @@
+import type { SectorName } from '@ghostfolio/common/types';
+
 import '@angular/localize/init';
 
 const locales = {
@@ -11,7 +13,6 @@ const locales = {
   CLOSE: $localize`Close`,
   DATA_IMPORT_AND_EXPORT_TOOLTIP_BASIC: $localize`Switch to Ghostfolio Premium or Ghostfolio Open Source easily`,
   DATA_IMPORT_AND_EXPORT_TOOLTIP_OSS: $localize`Switch to Ghostfolio Premium easily`,
-  DATA_IMPORT_AND_EXPORT_TOOLTIP_PREMIUM: $localize`Switch to Ghostfolio Open Source or Ghostfolio Basic easily`,
   DATA_SOURCE: $localize`Data Source`,
   EMERGENCY_FUND: $localize`Emergency Fund`,
   EXCLUDE_FROM_ANALYSIS: $localize`Exclude from Analysis`,
@@ -56,6 +57,7 @@ const locales = {
   COLLECTIBLE: $localize`Collectible`,
   CRYPTOCURRENCY: $localize`Cryptocurrency`,
   ETF: $localize`ETF`,
+  LOAN: $localize`Loan`,
   MUTUALFUND: $localize`Mutual Fund`,
   PRECIOUS_METAL: $localize`Precious Metal`,
   PRIVATE_EQUITY: $localize`Private Equity`,
@@ -73,42 +75,27 @@ const locales = {
   Oceania: $localize`Oceania`,
   'South America': $localize`South America`,
 
-  // Countries
-  Armenia: $localize`Armenia`,
-  Argentina: $localize`Argentina`,
-  Australia: $localize`Australia`,
-  Austria: $localize`Austria`,
-  Belgium: $localize`Belgium`,
-  'British Virgin Islands': $localize`British Virgin Islands`,
-  Bulgaria: $localize`Bulgaria`,
-  Canada: $localize`Canada`,
-  'Czech Republic': $localize`Czech Republic`,
-  Finland: $localize`Finland`,
-  France: $localize`France`,
-  Germany: $localize`Germany`,
-  India: $localize`India`,
-  Indonesia: $localize`Indonesia`,
-  Italy: $localize`Italy`,
-  Japan: $localize`Japan`,
-  Netherlands: $localize`Netherlands`,
-  'New Zealand': $localize`New Zealand`,
-  Poland: $localize`Poland`,
-  Romania: $localize`Romania`,
-  Singapore: $localize`Singapore`,
-  'South Africa': $localize`South Africa`,
-  Switzerland: $localize`Switzerland`,
-  Thailand: $localize`Thailand`,
-  Ukraine: $localize`Ukraine`,
-  'United Kingdom': $localize`United Kingdom`,
-  'United States': $localize`United States`,
-
   // Fear and Greed Index
   EXTREME_FEAR: $localize`Extreme Fear`,
   EXTREME_GREED: $localize`Extreme Greed`,
   FEAR: $localize`Fear`,
   GREED: $localize`Greed`,
-  NEUTRAL: $localize`Neutral`
-};
+  NEUTRAL: $localize`Neutral`,
+
+  // Sectors
+  'Basic Materials': $localize`Basic Materials`,
+  'Communication Services': $localize`Communication Services`,
+  'Consumer Cyclical': $localize`Consumer Cyclical`,
+  'Consumer Defensive': $localize`Consumer Defensive`,
+  Energy: $localize`Energy`,
+  'Financial Services': $localize`Financial Services`,
+  Healthcare: $localize`Healthcare`,
+  Industrials: $localize`Industrials`,
+  Other: $localize`Other`,
+  'Real Estate': $localize`Real Estate`,
+  Technology: $localize`Technology`,
+  Utilities: $localize`Utilities`
+} satisfies Record<SectorName, string> & Record<string, string>;
 
 export function translate(aKey: string): string {
   return locales[aKey] ?? aKey;

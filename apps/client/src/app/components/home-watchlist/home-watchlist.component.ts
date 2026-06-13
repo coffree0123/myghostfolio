@@ -1,5 +1,6 @@
 import { ImpersonationStorageService } from '@ghostfolio/client/services/impersonation-storage.service';
 import { UserService } from '@ghostfolio/client/services/user/user.service';
+import { locale as defaultLocale } from '@ghostfolio/common/config';
 import {
   AssetProfileIdentifier,
   Benchmark,
@@ -7,6 +8,7 @@ import {
 } from '@ghostfolio/common/interfaces';
 import { hasPermission, permissions } from '@ghostfolio/common/permissions';
 import { GfBenchmarkComponent } from '@ghostfolio/ui/benchmark';
+import { GfFabComponent } from '@ghostfolio/ui/fab';
 import { GfPremiumIndicatorComponent } from '@ghostfolio/ui/premium-indicator';
 import { DataService } from '@ghostfolio/ui/services';
 
@@ -14,19 +16,16 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  computed,
   CUSTOM_ELEMENTS_SCHEMA,
-  OnDestroy,
+  DestroyRef,
+  inject,
   OnInit
 } from '@angular/core';
-import { MatButtonModule } from '@angular/material/button';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import { IonIcon } from '@ionic/angular/standalone';
-import { addIcons } from 'ionicons';
-import { addOutline } from 'ionicons/icons';
 import { DeviceDetectorService } from 'ngx-device-detector';
-import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
 
 import { GfCreateWatchlistItemDialogComponent } from './create-watchlist-item-dialog/create-watchlist-item-dialog.component';
 import { CreateWatchlistItemDialogParams } from './create-watchlist-item-dialog/interfaces/interfaces';
@@ -35,9 +34,8 @@ import { CreateWatchlistItemDialogParams } from './create-watchlist-item-dialog/
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     GfBenchmarkComponent,
+    GfFabComponent,
     GfPremiumIndicatorComponent,
-    IonIcon,
-    MatButtonModule,
     RouterModule
   ],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
@@ -45,37 +43,39 @@ import { CreateWatchlistItemDialogParams } from './create-watchlist-item-dialog/
   styleUrls: ['./home-watchlist.scss'],
   templateUrl: './home-watchlist.html'
 })
-export class GfHomeWatchlistComponent implements OnDestroy, OnInit {
-  public deviceType: string;
-  public hasImpersonationId: boolean;
-  public hasPermissionToCreateWatchlistItem: boolean;
-  public hasPermissionToDeleteWatchlistItem: boolean;
-  public user: User;
-  public watchlist: Benchmark[];
+export class GfHomeWatchlistComponent implements OnInit {
+  protected hasImpersonationId: boolean;
+  protected hasPermissionToCreateWatchlistItem: boolean;
+  protected hasPermissionToDeleteWatchlistItem: boolean;
+  protected user: User;
+  protected watchlist: Benchmark[];
 
-  private unsubscribeSubject = new Subject<void>();
+  protected readonly deviceType = computed(
+    () => this.deviceDetectorService.deviceInfo().deviceType
+  );
 
-  public constructor(
-    private changeDetectorRef: ChangeDetectorRef,
-    private dataService: DataService,
-    private deviceService: DeviceDetectorService,
-    private dialog: MatDialog,
-    private impersonationStorageService: ImpersonationStorageService,
-    private route: ActivatedRoute,
-    private router: Router,
-    private userService: UserService
-  ) {
-    this.deviceType = this.deviceService.getDeviceInfo().deviceType;
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+  private readonly dataService = inject(DataService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly deviceDetectorService = inject(DeviceDetectorService);
+  private readonly dialog = inject(MatDialog);
+  private readonly impersonationStorageService = inject(
+    ImpersonationStorageService
+  );
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly userService = inject(UserService);
 
+  public constructor() {
     this.impersonationStorageService
       .onChangeHasImpersonation()
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((impersonationId) => {
         this.hasImpersonationId = !!impersonationId;
       });
 
     this.route.queryParams
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((params) => {
         if (params['createWatchlistItemDialog']) {
           this.openCreateWatchlistItemDialog();
@@ -83,7 +83,7 @@ export class GfHomeWatchlistComponent implements OnDestroy, OnInit {
       });
 
     this.userService.stateChanged
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((state) => {
         if (state?.user) {
           this.user = state.user;
@@ -104,21 +104,19 @@ export class GfHomeWatchlistComponent implements OnDestroy, OnInit {
           this.changeDetectorRef.markForCheck();
         }
       });
-
-    addIcons({ addOutline });
   }
 
   public ngOnInit() {
     this.loadWatchlistData();
   }
 
-  public onWatchlistItemDeleted({
+  protected onWatchlistItemDeleted({
     dataSource,
     symbol
   }: AssetProfileIdentifier) {
     this.dataService
       .deleteWatchlistItem({ dataSource, symbol })
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           return this.loadWatchlistData();
@@ -126,15 +124,10 @@ export class GfHomeWatchlistComponent implements OnDestroy, OnInit {
       });
   }
 
-  public ngOnDestroy() {
-    this.unsubscribeSubject.next();
-    this.unsubscribeSubject.complete();
-  }
-
   private loadWatchlistData() {
     this.dataService
       .fetchWatchlist()
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(({ watchlist }) => {
         this.watchlist = watchlist;
 
@@ -145,7 +138,7 @@ export class GfHomeWatchlistComponent implements OnDestroy, OnInit {
   private openCreateWatchlistItemDialog() {
     this.userService
       .get()
-      .pipe(takeUntil(this.unsubscribeSubject))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((user) => {
         this.user = user;
 
@@ -155,20 +148,20 @@ export class GfHomeWatchlistComponent implements OnDestroy, OnInit {
         >(GfCreateWatchlistItemDialogComponent, {
           autoFocus: false,
           data: {
-            deviceType: this.deviceType,
-            locale: this.user?.settings?.locale
+            deviceType: this.deviceType(),
+            locale: this.user?.settings?.locale ?? defaultLocale
           },
-          width: this.deviceType === 'mobile' ? '100vw' : '50rem'
+          width: this.deviceType() === 'mobile' ? '100vw' : '50rem'
         });
 
         dialogRef
           .afterClosed()
-          .pipe(takeUntil(this.unsubscribeSubject))
+          .pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe(({ dataSource, symbol } = {}) => {
             if (dataSource && symbol) {
               this.dataService
                 .postWatchlistItem({ dataSource, symbol })
-                .pipe(takeUntil(this.unsubscribeSubject))
+                .pipe(takeUntilDestroyed(this.destroyRef))
                 .subscribe({
                   next: () => this.loadWatchlistData()
                 });

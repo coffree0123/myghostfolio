@@ -25,11 +25,15 @@ npm-debug.log
 
 # misc
 /.angular/cache
+.claude/settings.local.json
+.claude/worktrees
 .cursor/rules/nx-rules.mdc
 .env
 .env.prod
 .github/instructions/nx.instructions.md
 .nx/cache
+.nx/polygraph
+.nx/self-healing
 .nx/workspace-data
 /.sass-cache
 /connect.lock

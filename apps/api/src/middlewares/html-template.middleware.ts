@@ -83,11 +83,17 @@ const locales = {
   '/en/blog/2025/11/black-weeks-2025': {
     featureGraphicPath: 'assets/images/blog/black-weeks-2025.jpg',
     title: `Black Weeks 2025 - ${title}`
+  },
+  '/en/blog/2026/04/ghostfolio-3': {
+    featureGraphicPath: 'assets/images/blog/ghostfolio-3.jpg',
+    title: `Announcing Ghostfolio 3.0 - ${title}`
   }
 };
 
 @Injectable()
 export class HtmlTemplateMiddleware implements NestMiddleware {
+  private readonly logger = new Logger(HtmlTemplateMiddleware.name);
+
   private indexHtmlMap: { [languageCode: string]: string } = {};
 
   public constructor(private readonly i18nService: I18nService) {
@@ -103,11 +109,7 @@ export class HtmlTemplateMiddleware implements NestMiddleware {
         {}
       );
     } catch (error) {
-      Logger.error(
-        'Failed to initialize index HTML map',
-        error,
-        'HTMLTemplateMiddleware'
-      );
+      this.logger.error('Failed to initialize index HTML map', error);
     }
   }
 

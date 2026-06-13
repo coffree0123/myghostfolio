@@ -12,6 +12,7 @@ import {
   PROPERTY_DATA_SOURCE_MAPPING
 } from '@ghostfolio/common/config';
 import { CreateOrderDto } from '@ghostfolio/common/dtos';
+import { SubscriptionType } from '@ghostfolio/common/enums';
 import {
   DATE_FORMAT,
   getAssetProfileIdentifier,
@@ -40,6 +41,8 @@ import { AssetProfileInvalidError } from './errors/asset-profile-invalid.error';
 
 @Injectable()
 export class DataProviderService implements OnModuleInit {
+  private readonly logger = new Logger(DataProviderService.name);
+
   private dataProviderMapping: { [dataProviderName: string]: string };
 
   public constructor(
@@ -81,6 +84,7 @@ export class DataProviderService implements OnModuleInit {
     return false;
   }
 
+  // TODO: Change symbol in response to assetProfileIdentifier
   public async getAssetProfiles(items: AssetProfileIdentifier[]): Promise<{
     [symbol: string]: Partial<SymbolProfile>;
   }> {
@@ -127,7 +131,7 @@ export class DataProviderService implements OnModuleInit {
         );
       }
     } catch (error) {
-      Logger.error(error, 'DataProviderService');
+      this.logger.error(error);
 
       throw error;
     }
@@ -227,7 +231,7 @@ export class DataProviderService implements OnModuleInit {
 
       if (
         this.configurationService.get('ENABLE_FEATURE_SUBSCRIPTION') &&
-        user.subscription.type === 'Basic'
+        user.subscription.type === SubscriptionType.Basic
       ) {
         const dataProvider = this.getDataProvider(DataSource[dataSource]);
 
@@ -329,6 +333,7 @@ export class DataProviderService implements OnModuleInit {
     });
   }
 
+  // TODO: Change symbol in response to assetProfileIdentifier
   public async getHistorical(
     aItems: AssetProfileIdentifier[],
     aGranularity: Granularity = 'month',
@@ -388,12 +393,13 @@ export class DataProviderService implements OnModuleInit {
         return r;
       }, {});
     } catch (error) {
-      Logger.error(error, 'DataProviderService');
+      this.logger.error(error);
     } finally {
       return response;
     }
   }
 
+  // TODO: Change symbol in response to assetProfileIdentifier
   public async getHistoricalRaw({
     assetProfileIdentifiers,
     from,
@@ -499,7 +505,7 @@ export class DataProviderService implements OnModuleInit {
         result[symbol] = data;
       }
     } catch (error) {
-      Logger.error(error, 'DataProviderService');
+      this.logger.error(error);
 
       throw error;
     }
@@ -507,6 +513,7 @@ export class DataProviderService implements OnModuleInit {
     return result;
   }
 
+  // TODO: Change symbol in response to assetProfileIdentifier
   public async getQuotes({
     items,
     requestTimeout,
@@ -562,13 +569,12 @@ export class DataProviderService implements OnModuleInit {
     const numberOfItemsInCache = Object.keys(response)?.length;
 
     if (numberOfItemsInCache) {
-      Logger.debug(
+      this.logger.debug(
         `Fetched ${numberOfItemsInCache} quote${
           numberOfItemsInCache > 1 ? 's' : ''
         } from cache in ${((performance.now() - startTimeTotal) / 1000).toFixed(
           3
-        )} seconds`,
-        'DataProviderService'
+        )} seconds`
       );
     }
 
@@ -591,7 +597,7 @@ export class DataProviderService implements OnModuleInit {
           } else if (
             dataProvider.getDataProviderInfo().isPremium &&
             this.configurationService.get('ENABLE_FEATURE_SUBSCRIPTION') &&
-            user?.subscription.type === 'Basic'
+            user?.subscription.type === SubscriptionType.Basic
           ) {
             // Skip symbols of Premium data providers for users without subscription
             return false;
@@ -679,14 +685,13 @@ export class DataProviderService implements OnModuleInit {
               }
             }
 
-            Logger.debug(
+            this.logger.debug(
               `Fetched ${symbolsChunk.length} quote${
                 symbolsChunk.length > 1 ? 's' : ''
               } from ${dataSource} in ${(
                 (performance.now() - startTimeDataSource) /
                 1000
-              ).toFixed(3)} seconds`,
-              'DataProviderService'
+              ).toFixed(3)} seconds`
             );
 
             try {
@@ -717,15 +722,18 @@ export class DataProviderService implements OnModuleInit {
 
     await Promise.all(promises);
 
-    Logger.debug('--------------------------------------------------------');
-    Logger.debug(
+    this.logger.debug(
+      '--------------------------------------------------------'
+    );
+    this.logger.debug(
       `Fetched ${items.length} quote${items.length > 1 ? 's' : ''} in ${(
         (performance.now() - startTimeTotal) /
         1000
-      ).toFixed(3)} seconds`,
-      'DataProviderService'
+      ).toFixed(3)} seconds`
     );
-    Logger.debug('========================================================');
+    this.logger.debug(
+      '========================================================'
+    );
 
     return response;
   }
@@ -780,7 +788,7 @@ export class DataProviderService implements OnModuleInit {
       })
       .map((lookupItem) => {
         if (this.configurationService.get('ENABLE_FEATURE_SUBSCRIPTION')) {
-          if (user.subscription.type === 'Premium') {
+          if (user.subscription.type === SubscriptionType.Premium) {
             lookupItem.dataProviderInfo.isPremium = false;
           }
 

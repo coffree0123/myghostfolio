@@ -1,11 +1,15 @@
 import { UserService } from '@ghostfolio/client/services/user/user.service';
 import {
+  DEFAULT_PAGE_SIZE,
   NUMERICAL_PRECISION_THRESHOLD_3_FIGURES,
-  NUMERICAL_PRECISION_THRESHOLD_5_FIGURES,
-  NUMERICAL_PRECISION_THRESHOLD_6_FIGURES
+  NUMERICAL_PRECISION_THRESHOLD_5_FIGURES
 } from '@ghostfolio/common/config';
 import { CreateOrderDto } from '@ghostfolio/common/dtos';
-import { DATE_FORMAT, downloadAsFile } from '@ghostfolio/common/helper';
+import {
+  DATE_FORMAT,
+  downloadAsFile,
+  getCountryName
+} from '@ghostfolio/common/helper';
 import {
   Activity,
   DataProviderInfo,
@@ -29,7 +33,6 @@ import { DataService } from '@ghostfolio/ui/services';
 import { GfTagsSelectorComponent } from '@ghostfolio/ui/tags-selector';
 import { GfValueComponent } from '@ghostfolio/ui/value';
 
-import { CommonModule } from '@angular/common';
 import {
   CUSTOM_ELEMENTS_SCHEMA,
   ChangeDetectionStrategy,
@@ -49,6 +52,7 @@ import {
   MatDialogRef
 } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { PageEvent } from '@angular/material/paginator';
 import { SortDirection } from '@angular/material/sort';
 import { MatTableDataSource } from '@angular/material/table';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -76,7 +80,6 @@ import { HoldingDetailDialogParams } from './interfaces/interfaces';
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'd-flex flex-column h-100' },
   imports: [
-    CommonModule,
     GfAccountsTableComponent,
     GfActivitiesTableComponent,
     GfDataProviderCreditsComponent,
@@ -121,6 +124,7 @@ export class GfHoldingDetailDialogComponent implements OnInit {
   public dividendInBaseCurrencyPrecision = 2;
   public dividendYieldPercentWithCurrencyEffect: number;
   public feeInBaseCurrency: number;
+  public getCountryName = getCountryName;
   public hasPermissionToCreateOwnTag: boolean;
   public hasPermissionToReadMarketDataOfOwnAssetProfile: boolean;
   public historicalDataItems: LineChartItem[];
@@ -142,6 +146,8 @@ export class GfHoldingDetailDialogComponent implements OnInit {
   public netPerformancePercentWithCurrencyEffectPrecision = 2;
   public netPerformanceWithCurrencyEffect: number;
   public netPerformanceWithCurrencyEffectPrecision = 2;
+  public pageIndex = 0;
+  public pageSize = DEFAULT_PAGE_SIZE;
   public quantity: number;
   public quantityPrecision = 2;
   public reportDataGlitchMail: string;
@@ -155,6 +161,7 @@ export class GfHoldingDetailDialogComponent implements OnInit {
   public SymbolProfile: EnhancedSymbolProfile;
   public tags: Tag[];
   public tagsAvailable: Tag[];
+  public translate = translate;
   public user: User;
   public value: number;
 
@@ -180,10 +187,7 @@ export class GfHoldingDetailDialogComponent implements OnInit {
   }
 
   public ngOnInit() {
-    const filters: Filter[] = [
-      { id: this.data.dataSource, type: 'DATA_SOURCE' },
-      { id: this.data.symbol, type: 'SYMBOL' }
-    ];
+    const filters = this.getActivityFilters();
 
     this.holdingForm = this.formBuilder.group({
       tags: [] as string[]
@@ -242,18 +246,7 @@ export class GfHoldingDetailDialogComponent implements OnInit {
         this.changeDetectorRef.markForCheck();
       });
 
-    this.dataService
-      .fetchActivities({
-        filters,
-        sortColumn: this.sortColumn,
-        sortDirection: this.sortDirection
-      })
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(({ activities }) => {
-        this.dataSource = new MatTableDataSource(activities);
-
-        this.changeDetectorRef.markForCheck();
-      });
+    this.fetchActivities(filters);
 
     this.dataService
       .fetchHoldingDetail({
@@ -288,7 +281,7 @@ export class GfHoldingDetailDialogComponent implements OnInit {
           this.averagePrice = averagePrice;
 
           if (
-            this.averagePrice >= NUMERICAL_PRECISION_THRESHOLD_6_FIGURES &&
+            this.averagePrice >= NUMERICAL_PRECISION_THRESHOLD_5_FIGURES &&
             this.data.deviceType === 'mobile'
           ) {
             this.averagePricePrecision = 0;
@@ -303,7 +296,7 @@ export class GfHoldingDetailDialogComponent implements OnInit {
           if (
             this.data.deviceType === 'mobile' &&
             this.dividendInBaseCurrency >=
-              NUMERICAL_PRECISION_THRESHOLD_6_FIGURES
+              NUMERICAL_PRECISION_THRESHOLD_5_FIGURES
           ) {
             this.dividendInBaseCurrencyPrecision = 0;
           }
@@ -341,7 +334,7 @@ export class GfHoldingDetailDialogComponent implements OnInit {
           if (
             this.data.deviceType === 'mobile' &&
             this.investmentInBaseCurrencyWithCurrencyEffect >=
-              NUMERICAL_PRECISION_THRESHOLD_6_FIGURES
+              NUMERICAL_PRECISION_THRESHOLD_5_FIGURES
           ) {
             this.investmentInBaseCurrencyWithCurrencyEffectPrecision = 0;
           }
@@ -351,7 +344,7 @@ export class GfHoldingDetailDialogComponent implements OnInit {
 
           if (
             this.data.deviceType === 'mobile' &&
-            this.marketPriceMax >= NUMERICAL_PRECISION_THRESHOLD_6_FIGURES
+            this.marketPriceMax >= NUMERICAL_PRECISION_THRESHOLD_5_FIGURES
           ) {
             this.marketPriceMaxPrecision = 0;
           }
@@ -360,14 +353,14 @@ export class GfHoldingDetailDialogComponent implements OnInit {
 
           if (
             this.data.deviceType === 'mobile' &&
-            this.marketPriceMin >= NUMERICAL_PRECISION_THRESHOLD_6_FIGURES
+            this.marketPriceMin >= NUMERICAL_PRECISION_THRESHOLD_5_FIGURES
           ) {
             this.marketPriceMinPrecision = 0;
           }
 
           if (
             this.data.deviceType === 'mobile' &&
-            this.marketPrice >= NUMERICAL_PRECISION_THRESHOLD_6_FIGURES
+            this.marketPrice >= NUMERICAL_PRECISION_THRESHOLD_5_FIGURES
           ) {
             this.marketPricePrecision = 0;
           }
@@ -376,7 +369,7 @@ export class GfHoldingDetailDialogComponent implements OnInit {
 
           if (
             this.data.deviceType === 'mobile' &&
-            this.netPerformance >= NUMERICAL_PRECISION_THRESHOLD_6_FIGURES
+            this.netPerformance >= NUMERICAL_PRECISION_THRESHOLD_5_FIGURES
           ) {
             this.netPerformancePrecision = 0;
           }
@@ -445,7 +438,10 @@ export class GfHoldingDetailDialogComponent implements OnInit {
           if (SymbolProfile?.countries?.length > 0) {
             for (const country of SymbolProfile.countries) {
               this.countries[country.code] = {
-                name: country.name,
+                name: getCountryName({
+                  code: country.code,
+                  locale: this.data.locale
+                }),
                 value: country.weight
               };
             }
@@ -454,7 +450,7 @@ export class GfHoldingDetailDialogComponent implements OnInit {
           if (SymbolProfile?.sectors?.length > 0) {
             for (const sector of SymbolProfile.sectors) {
               this.sectors[sector.name] = {
-                name: sector.name,
+                name: translate(sector.name),
                 value: sector.weight
               };
             }
@@ -545,6 +541,12 @@ export class GfHoldingDetailDialogComponent implements OnInit {
       });
   }
 
+  public onChangePage(page: PageEvent) {
+    this.pageIndex = page.pageIndex;
+
+    this.fetchActivities();
+  }
+
   public onCloneActivity(aActivity: Activity) {
     this.router.navigate(
       internalRoutes.portfolio.subRoutes.activities.routerLink,
@@ -628,6 +630,23 @@ export class GfHoldingDetailDialogComponent implements OnInit {
     this.dialogRef.close();
   }
 
+  private fetchActivities(filters: Filter[] = this.getActivityFilters()) {
+    this.dataService
+      .fetchActivities({
+        filters,
+        skip: this.pageIndex * this.pageSize,
+        sortColumn: this.sortColumn,
+        sortDirection: this.sortDirection,
+        take: this.pageSize
+      })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(({ activities }) => {
+        this.dataSource = new MatTableDataSource(activities);
+
+        this.changeDetectorRef.markForCheck();
+      });
+  }
+
   private fetchMarketData() {
     this.dataService
       .fetchMarketDataBySymbol({
@@ -649,5 +668,12 @@ export class GfHoldingDetailDialogComponent implements OnInit {
 
         this.changeDetectorRef.markForCheck();
       });
+  }
+
+  private getActivityFilters(): Filter[] {
+    return [
+      { id: this.data.dataSource, type: 'DATA_SOURCE' },
+      { id: this.data.symbol, type: 'SYMBOL' }
+    ];
   }
 }

@@ -11,9 +11,10 @@
     <div class="col-xs-12 col-md-10 offset-md-1">
       <gf-benchmark
         [benchmarks]="watchlist"
-        [deviceType]="deviceType"
+        [deviceType]="deviceType()"
         [hasPermissionToDeleteItem]="hasPermissionToDeleteWatchlistItem"
         [locale]="user?.settings?.locale || undefined"
+        [showIcon]="true"
         [user]="user"
         (itemDeleted)="onWatchlistItemDeleted($event)"
       />
@@ -21,15 +22,5 @@
   </div>
 </div>
 @if (!hasImpersonationId && hasPermissionToCreateWatchlistItem) {
-  <div class="fab-container">
-    <a
-      class="align-items-center d-flex justify-content-center"
-      color="primary"
-      mat-fab
-      [queryParams]="{ createWatchlistItemDialog: true }"
-      [routerLink]="[]"
-    >
-      <ion-icon name="add-outline" size="large" />
-    </a>
-  </div>
+  <gf-fab [queryParams]="{ createWatchlistItemDialog: true }" />
 }

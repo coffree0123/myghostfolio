@@ -27,7 +27,7 @@ export class CurrencyClusterRiskCurrentInvestment extends Rule<Settings> {
   public evaluate(ruleSettings: Settings) {
     const holdingsGroupedByCurrency = this.groupCurrentHoldingsByAttribute(
       this.holdings,
-      'currency',
+      'assetProfile.currency',
       ruleSettings.baseCurrency
     );
 
@@ -73,13 +73,6 @@ export class CurrencyClusterRiskCurrentInvestment extends Rule<Settings> {
       }),
       value: true
     };
-  }
-
-  public getCategoryName() {
-    return this.i18nService.getTranslation({
-      id: 'rule.currencyClusterRisk.category',
-      languageCode: this.getLanguageCode()
-    });
   }
 
   public getConfiguration() {

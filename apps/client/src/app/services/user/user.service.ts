@@ -3,14 +3,15 @@ import { Filter, User } from '@ghostfolio/common/interfaces';
 import { hasPermission, permissions } from '@ghostfolio/common/permissions';
 
 import { HttpClient } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { DestroyRef, Injectable } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { ObservableStore } from '@codewithdan/observable-store';
 import { parseISO } from 'date-fns';
 import { DeviceDetectorService } from 'ngx-device-detector';
-import { Observable, Subject, of } from 'rxjs';
+import { Observable, of } from 'rxjs';
 import { throwError } from 'rxjs';
-import { catchError, map, takeUntil } from 'rxjs/operators';
+import { catchError, map } from 'rxjs/operators';
 
 import { SubscriptionInterstitialDialogParams } from '../../components/subscription-interstitial-dialog/interfaces/interfaces';
 import { GfSubscriptionInterstitialDialogComponent } from '../../components/subscription-interstitial-dialog/subscription-interstitial-dialog.component';
@@ -22,10 +23,10 @@ import { UserStoreState } from './user-store.state';
 })
 export class UserService extends ObservableStore<UserStoreState> {
   private deviceType: string;
-  private unsubscribeSubject = new Subject<void>();
 
   public constructor(
-    private deviceService: DeviceDetectorService,
+    private destroyRef: DestroyRef,
+    private deviceDetectorService: DeviceDetectorService,
     private dialog: MatDialog,
     private http: HttpClient,
     private webAuthnService: WebAuthnService
@@ -34,7 +35,7 @@ export class UserService extends ObservableStore<UserStoreState> {
 
     this.setState({ user: undefined }, UserStoreActions.Initialize);
 
-    this.deviceType = this.deviceService.getDeviceInfo().deviceType;
+    this.deviceType = this.deviceDetectorService.getDeviceInfo().deviceType;
   }
 
   public get(force = false) {
@@ -163,7 +164,7 @@ export class UserService extends ObservableStore<UserStoreState> {
 
           dialogRef
             .afterClosed()
-            .pipe(takeUntil(this.unsubscribeSubject))
+            .pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe();
         }
 

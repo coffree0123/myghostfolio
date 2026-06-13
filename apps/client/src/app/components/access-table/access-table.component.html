@@ -39,7 +39,7 @@
               getPublicUrl(element.id)
             }}</a>
           </div>
-          @if (user?.settings?.isExperimentalFeatures) {
+          @if (user()?.settings?.isExperimentalFeatures) {
             <div>
               <code
                 >GET {{ baseUrl }}/api/v1/public/{{
@@ -53,9 +53,9 @@
     </ng-container>
 
     <ng-container matColumnDef="actions" stickyEnd>
-      <th *matHeaderCellDef class="px-1 text-center" mat-header-cell></th>
+      <th *matHeaderCellDef class="px-1 text-right" mat-header-cell></th>
 
-      <td *matCellDef="let element" class="px-1 text-center" mat-cell>
+      <td *matCellDef="let element" class="px-1 text-right" mat-cell>
         <button
           class="mx-1 no-min-width px-2"
           mat-button
@@ -69,7 +69,7 @@
           class="no-max-width"
           xPosition="before"
         >
-          @if (user?.settings?.isExperimentalFeatures) {
+          @if (user()?.settings?.isExperimentalFeatures) {
             <button mat-menu-item (click)="onUpdateAccess(element.id)">
               <span class="align-items-center d-flex">
                 <ion-icon class="mr-2" name="create-outline" />
@@ -86,7 +86,8 @@
             </button>
           }
           @if (
-            user?.settings?.isExperimentalFeatures || element.type === 'PUBLIC'
+            user()?.settings?.isExperimentalFeatures ||
+            element.type === 'PUBLIC'
           ) {
             <hr class="my-0" />
           }
@@ -100,7 +101,7 @@
       </td>
     </ng-container>
 
-    <tr *matHeaderRowDef="displayedColumns" mat-header-row></tr>
-    <tr *matRowDef="let row; columns: displayedColumns" mat-row></tr>
+    <tr *matHeaderRowDef="displayedColumns()" mat-header-row></tr>
+    <tr *matRowDef="let row; columns: displayedColumns()" mat-row></tr>
   </table>
 </div>
